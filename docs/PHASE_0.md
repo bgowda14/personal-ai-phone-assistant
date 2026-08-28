@@ -8,7 +8,7 @@ Target: Day 1
 - [x] Create initial folders: `mobile/`, `backend/`, `docs/`
 - [x] Create project README
 - [x] Initialize Git repository
-- [ ] Create GitHub repository
+- [x] Create GitHub repository
 - [x] Install/check development tools
 - [x] Create project board with Backlog, In Progress, Done, Bugs
 
@@ -26,5 +26,9 @@ Track installed tools here:
 - Expo Go on iPhone 16 Pro:
 
 ## Completion
+
+GitHub repository: https://github.com/bgowda14/personal-ai-phone-assistant (private)
+
+Remaining before full completion: upgrade Node.js to >=20.19.4, install Expo Go on both test devices.
 
 Actual completion date:
