@@ -17,11 +17,11 @@ Target: Day 1
 Track installed tools here:
 
 - VS Code: Installed at `/Applications/Visual Studio Code.app`; `code` CLI is not configured
-- Node.js: v20.17.0 installed; needs upgrade to >=20.19.4 for current Expo/React Native tooling
-- npm: 10.8.2
+- Node.js: upgraded via nvm (Homebrew) to v24.20.0 LTS, set as nvm default; no more Expo version warnings. `code` CLI still needs to be enabled from within VS Code (Cmd+Shift+P → "Shell Command: Install 'code' command in PATH")
+- npm: 11.19.0 (bundled with the new Node install)
 - Git: 2.51.2
 - Python: 3.13.9
-- Expo: `npx expo --version` works and reported 57.0.19, with Node version warnings
+- Expo: `npx expo --version` works cleanly under Node v24.20.0, reported 57.0.19
 - Expo Go on iPhone SE:
 - Expo Go on iPhone 16 Pro:
 
@@ -29,6 +29,6 @@ Track installed tools here:
 
 GitHub repository: https://github.com/bgowda14/personal-ai-phone-assistant (private)
 
-Remaining before full completion: upgrade Node.js to >=20.19.4, install Expo Go on both test devices.
+Remaining before full completion: enable `code` CLI in VS Code, install Expo Go on both test devices.
 
 Actual completion date:
