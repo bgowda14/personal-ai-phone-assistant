@@ -22,13 +22,15 @@ Track installed tools here:
 - Git: 2.51.2
 - Python: 3.13.9
 - Expo: `npx expo --version` works cleanly under Node v24.20.0, reported 57.0.19
-- Expo Go on iPhone SE:
-- Expo Go on iPhone 16 Pro:
+- Expo Go on iPhone SE: not yet installed (blocked — missing charging cable, deferred)
+- Expo Go on iPhone 16 Pro: installed (2026-09-10)
 
 ## Completion
 
 GitHub repository: https://github.com/bgowda14/personal-ai-phone-assistant (private)
 
-Remaining before full completion: enable `code` CLI in VS Code, install Expo Go on both test devices.
+Remaining before full completion: enable `code` CLI in VS Code, install Expo Go on iPhone SE (deferred until a cable is available).
+
+Note: proceeding into Phase 1 using the iPhone 16 Pro as the primary test device for now instead of the SE.
 
 Actual completion date:
