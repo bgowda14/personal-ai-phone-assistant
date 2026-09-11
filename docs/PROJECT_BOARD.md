@@ -3,11 +3,11 @@
 ## Backlog
 
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
-- Start Phase 2: build the FastAPI backend
+- Start Phase 3: add PostgreSQL via Supabase for real persistence
 
 ## In Progress
 
-- (none — Phase 1 core functionality complete, only SE verification outstanding)
+- (none — Phase 2 core functionality complete, only SE verification outstanding from Phase 1)
 
 ## Done
 
@@ -22,6 +22,8 @@
 - Scaffolded Expo + TypeScript project in `mobile/`
 - Ran the app on iPhone 16 Pro via Expo Go (Milestone 1: app running on a real device)
 - Built home screen with working status buttons (Available / Busy / Sleeping / In Class / Driving / Custom) and basic styling — verified working on iPhone 16 Pro
+- Built FastAPI backend with `/health`, `GET /status`, `POST /status` endpoints
+- Connected mobile app to backend over Wi-Fi — tapping a status button on the phone updates the backend (Milestone 2: phone + Python backend communicating)
 
 ## Bugs
 

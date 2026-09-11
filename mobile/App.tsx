@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+// Your Mac's LAN IP running `uvicorn main:app --reload` — update this if your
+// network changes or your Mac gets a new IP.
+const API_BASE_URL = 'http://100.70.78.175:8000';
 
 const STATUS_OPTIONS = [
   'Available',
@@ -15,6 +19,24 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 export default function App() {
   const [status, setStatus] = useState<Status>('Available');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/status`)
+      .then((res) => res.json())
+      .then((data) => setStatus(data.mode))
+      .catch(() => setError('Could not reach backend'));
+  }, []);
+
+  const updateStatus = (option: Status) => {
+    setStatus(option);
+    setError(null);
+    fetch(`${API_BASE_URL}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: option }),
+    }).catch(() => setError('Could not reach backend'));
+  };
 
   return (
     <View style={styles.container}>
@@ -23,12 +45,13 @@ export default function App() {
 
       <Text style={styles.label}>Current Status</Text>
       <Text style={styles.status}>{status.toUpperCase()}</Text>
+      {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.buttonRow}>
         {STATUS_OPTIONS.map((option) => (
           <Pressable
             key={option}
-            onPress={() => setStatus(option)}
+            onPress={() => updateStatus(option)}
             style={[
               styles.button,
               option === status && styles.buttonActive,
@@ -70,7 +93,12 @@ const styles = StyleSheet.create({
   status: {
     fontSize: 28,
     fontWeight: '700',
-    marginBottom: 32,
+    marginBottom: 12,
+  },
+  error: {
+    fontSize: 13,
+    color: '#c0392b',
+    marginBottom: 20,
   },
   buttonRow: {
     width: '100%',
