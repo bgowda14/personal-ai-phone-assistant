@@ -3,11 +3,11 @@
 ## Backlog
 
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
-- Start Phase 3: add PostgreSQL via Supabase for real persistence
+- Start Phase 4: get a real Twilio phone number
 
 ## In Progress
 
-- (none — Phase 2 core functionality complete, only SE verification outstanding from Phase 1)
+- (none — Phase 3 core functionality complete, only SE verification outstanding from Phase 1)
 
 ## Done
 
@@ -24,6 +24,8 @@
 - Built home screen with working status buttons (Available / Busy / Sleeping / In Class / Driving / Custom) and basic styling — verified working on iPhone 16 Pro
 - Built FastAPI backend with `/health`, `GET /status`, `POST /status` endpoints
 - Connected mobile app to backend over Wi-Fi — tapping a status button on the phone updates the backend (Milestone 2: phone + Python backend communicating)
+- Created Supabase project and `user_status` table
+- Backend now reads/writes PostgreSQL instead of an in-memory variable — status survives backend restarts (Milestone 3: phone + backend + database all communicating)
 
 ## Bugs
 
