@@ -2,7 +2,7 @@ import os
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from pydantic import BaseModel
 
 load_dotenv()
@@ -23,6 +23,17 @@ class StatusUpdate(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "online"}
+
+
+@app.post("/voice")
+def voice():
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        "<Say>Hi, you've reached Bharath's assistant.</Say>"
+        "</Response>"
+    )
+    return Response(content=twiml, media_type="application/xml")
 
 
 @app.get("/status")
