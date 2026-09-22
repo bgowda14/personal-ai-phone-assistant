@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 // Your Mac's LAN IP running `uvicorn main:app --reload` — update this if your
 // network changes or your Mac gets a new IP.
@@ -17,15 +24,56 @@ const STATUS_OPTIONS = [
 
 type Status = (typeof STATUS_OPTIONS)[number];
 
+type Call = {
+  id: number;
+  phone_number: string;
+  caller_name: string | null;
+  reason: string | null;
+  urgency: string | null;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+};
+
+function timeAgo(isoString: string): string {
+  const seconds = Math.max(0, (Date.now() - new Date(isoString).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function App() {
   const [status, setStatus] = useState<Status>('Available');
   const [error, setError] = useState<string | null>(null);
+  const [calls, setCalls] = useState<Call[]>([]);
+  const [callsError, setCallsError] = useState<string | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadCalls = () => {
+    setCallsError(null);
+    return fetch(`${API_BASE_URL}/calls`)
+      .then((res) => res.json())
+      .then((data) => setCalls(data))
+      .catch(() => setCallsError('Could not load recent calls'));
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCalls().finally(() => setRefreshing(false));
+  };
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/status`)
       .then((res) => res.json())
       .then((data) => setStatus(data.mode))
       .catch(() => setError('Could not reach backend'));
+
+    loadCalls();
   }, []);
 
   const updateStatus = (option: Status) => {
@@ -39,7 +87,13 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <StatusBar style="auto" />
       <Text style={styles.title}>Personal AI Assistant</Text>
 
@@ -68,7 +122,34 @@ export default function App() {
           </Pressable>
         ))}
       </View>
-    </View>
+
+      <Text style={styles.sectionTitle}>Recent Calls</Text>
+      {callsError && <Text style={styles.error}>{callsError}</Text>}
+      {!callsError && calls.length === 0 && (
+        <Text style={styles.emptyText}>No calls yet</Text>
+      )}
+      <View style={styles.callList}>
+        {calls.map((call) => (
+          <View key={call.id} style={styles.callCard}>
+            <View style={styles.callCardHeader}>
+              <Text style={styles.callName}>
+                {call.caller_name || call.phone_number}
+              </Text>
+              <Text style={styles.callTime}>{timeAgo(call.started_at)}</Text>
+            </View>
+            {call.reason && (
+              <Text style={styles.callReason}>{call.reason}</Text>
+            )}
+            <View style={styles.callMetaRow}>
+              {call.urgency && (
+                <Text style={styles.callUrgency}>Urgent: {call.urgency}</Text>
+              )}
+              <Text style={styles.callStatus}>{call.status}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -76,9 +157,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f7',
+  },
+  content: {
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingTop: 80,
+    paddingBottom: 48,
   },
   title: {
     fontSize: 20,
@@ -123,5 +207,62 @@ const styles = StyleSheet.create({
   },
   buttonTextActive: {
     color: '#fff',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    alignSelf: 'flex-start',
+    marginTop: 40,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    alignSelf: 'flex-start',
+  },
+  callList: {
+    width: '100%',
+    gap: 12,
+  },
+  callCard: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: '#fff',
+  },
+  callCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  callName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  callTime: {
+    fontSize: 12,
+    color: '#888',
+  },
+  callReason: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 6,
+  },
+  callMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  callUrgency: {
+    fontSize: 12,
+    color: '#c0392b',
+    fontWeight: '500',
+  },
+  callStatus: {
+    fontSize: 12,
+    color: '#888',
+    textTransform: 'capitalize',
   },
 });

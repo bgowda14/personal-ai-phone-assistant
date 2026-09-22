@@ -3,11 +3,13 @@
 ## Backlog
 
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
-- Phase 5: structured call screening (ask who's calling / reason / urgency, store in `calls` table)
+- ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
+- Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
+- Phase 6: real AI conversation (replace raw speech-to-text capture with OpenAI classification of name/company/intent/priority)
 
 ## In Progress
 
-- Phase 4: real Twilio number answers calls — greeting webhook verified, still need ngrok URL to stop being ephemeral (consider a reserved/static domain) before relying on it day-to-day
+(nothing — Phase 5 complete, Phase 6 not started)
 
 ## Done
 
@@ -29,6 +31,10 @@
 - Purchased Twilio subscription and a programmable US voice number (+1 443-300-0069)
 - Added `/voice` FastAPI endpoint returning static TwiML greeting
 - Ran backend locally, tunneled it with ngrok, wired the number's Voice webhook to the tunnel URL, called the number and heard the AI greeting (Milestone 4: real Twilio call answered by our own software)
+- Created `calls` table in Supabase
+- `/voice` flow now asks who's calling, what it's regarding, and whether it's urgent, storing each answer as the call progresses
+- Added `GET /calls` endpoint and a "Recent Calls" section in the mobile app
+- Tested the full flow on a real call to +1 443-300-0069 and confirmed it appeared via `GET /calls` (Milestone 6: a call appeared inside the mobile app automatically)
 
 ## Bugs
 
