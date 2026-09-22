@@ -3,7 +3,7 @@ import os
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, Form, Response
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Response
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -14,12 +14,77 @@ app = FastAPI()
 DATABASE_URL = os.environ["DATABASE_URL"]
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = "gpt-4o-mini"
+TRANSFER_PHONE_NUMBER = os.environ.get("TRANSFER_PHONE_NUMBER")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+CALLER_TYPES = [
+    "family",
+    "friend",
+    "recruiter",
+    "delivery",
+    "apartment",
+    "unknown",
+    "spam",
+]
+CONTACT_PRIORITIES = ["critical", "high", "normal", "low"]
 
 
 def get_connection():
     return psycopg.connect(DATABASE_URL)
+
+
+def decide_action(caller_type: str, priority: str, mode: str) -> str:
+    """Rule engine from the build plan's Phase 8 decision matrix.
+
+    Contacts give the ground-truth caller_type (relationship); priority is
+    always the AI's per-call read on urgency, not the contact's own
+    priority field — a family emergency should transfer even for a
+    generally low-priority contact.
+    """
+    if caller_type == "spam":
+        return "REJECT"
+    if caller_type in ("delivery", "apartment"):
+        return "TAKE_MESSAGE"
+
+    mode_key = (mode or "").strip().lower()
+    if mode_key not in ("available", "busy", "sleeping"):
+        # In Class / Driving / Custom / anything else the plan doesn't give
+        # an explicit matrix for: treat like Busy as the safe default.
+        mode_key = "busy"
+
+    if mode_key == "available":
+        if caller_type in ("family", "recruiter", "friend"):
+            return "TRANSFER"
+        return "SCREEN"  # unknown
+
+    if mode_key == "busy":
+        if caller_type in ("family", "recruiter"):
+            return "TRANSFER"
+        return "TAKE_MESSAGE"  # friend, unknown
+
+    # sleeping
+    if caller_type == "family" and priority == "high":
+        return "TRANSFER"
+    return "TAKE_MESSAGE"
+
+
+def find_contact_by_phone(phone_number: str):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, relationship, priority FROM contacts WHERE phone_number = %s;",
+                (phone_number,),
+            )
+            return cur.fetchone()
+
+
+def get_current_mode() -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT mode FROM user_status ORDER BY id LIMIT 1;")
+            row = cur.fetchone()
+    return row[0] if row else "busy"
 
 
 CALL_CLASSIFICATION_SCHEMA = {
@@ -107,7 +172,7 @@ def classify_call(call_sid: str) -> None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT caller_name, reason, urgency FROM calls WHERE call_sid = %s;",
+                "SELECT caller_name, reason, urgency, phone_number FROM calls WHERE call_sid = %s;",
                 (call_sid,),
             )
             row = cur.fetchone()
@@ -115,7 +180,7 @@ def classify_call(call_sid: str) -> None:
     if row is None:
         return
 
-    raw_intro, _raw_reason, raw_urgency = row
+    raw_intro, _raw_reason, raw_urgency, phone_number = row
     transcript = (
         f"When asked who's calling and what it's regarding, the caller said: "
         f"{raw_intro or '(no answer)'}\n"
@@ -139,6 +204,14 @@ def classify_call(call_sid: str) -> None:
         )
         result = json.loads(response.output_text)
 
+        contact = find_contact_by_phone(phone_number)
+        matched_contact_id = contact[0] if contact else None
+        effective_type = contact[2] if contact else result["caller_type"]
+
+        decided_action = decide_action(
+            effective_type, result["priority"], get_current_mode()
+        )
+
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -146,7 +219,8 @@ def classify_call(call_sid: str) -> None:
                     UPDATE calls
                     SET ai_name = %s, ai_company = %s, ai_type = %s,
                         ai_intent = %s, ai_priority = %s, ai_message = %s,
-                        ai_recommended_action = %s, ai_error = NULL
+                        ai_recommended_action = %s, ai_error = NULL,
+                        decided_action = %s, matched_contact_id = %s
                     WHERE call_sid = %s;
                     """,
                     (
@@ -157,6 +231,8 @@ def classify_call(call_sid: str) -> None:
                         result["priority"],
                         result["message"],
                         result["recommended_action"],
+                        decided_action,
+                        matched_contact_id,
                         call_sid,
                     ),
                 )
@@ -173,6 +249,13 @@ def classify_call(call_sid: str) -> None:
 
 class StatusUpdate(BaseModel):
     mode: str
+
+
+class ContactCreate(BaseModel):
+    name: str
+    phone_number: str
+    relationship: str
+    priority: str = "normal"
 
 
 def gather_response(question: str, action: str) -> Response:
@@ -193,8 +276,73 @@ def health():
     return {"status": "online"}
 
 
+MAX_SILENCE_RETRIES = 2
+
+
 @app.post("/voice")
 def voice(CallSid: str = Form(...), From: str = Form(...)):
+    contact = find_contact_by_phone(From)
+    is_known_spam = contact is not None and contact[2] == "spam"
+
+    if is_known_spam:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO calls (call_sid, phone_number, status,
+                        decided_action, matched_contact_id, ended_at)
+                    VALUES (%s, %s, 'completed', 'REJECT', %s, now())
+                    ON CONFLICT (call_sid) DO NOTHING;
+                    """,
+                    (CallSid, From, contact[0]),
+                )
+            conn.commit()
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response><Hangup/></Response>"
+        )
+        return Response(content=twiml, media_type="application/xml")
+
+    # Known, non-spam contact: if the mode + relationship alone already
+    # decides TRANSFER (true for every case the plan's matrix defines
+    # except a sleeping family member, which needs a live urgency check we
+    # haven't built yet — that case falls through to the normal flow
+    # below), skip the interrogation entirely and act immediately.
+    if contact is not None:
+        current_mode = get_current_mode()
+        preliminary_action = decide_action(contact[2], "normal", current_mode)
+        if preliminary_action == "TRANSFER":
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO calls (call_sid, phone_number, status,
+                            ai_name, ai_type, decided_action,
+                            matched_contact_id, ended_at)
+                        VALUES (%s, %s, 'completed', %s, %s, 'TRANSFER', %s, now())
+                        ON CONFLICT (call_sid) DO NOTHING;
+                        """,
+                        (CallSid, From, contact[1], contact[2], contact[0]),
+                    )
+                conn.commit()
+
+            if TRANSFER_PHONE_NUMBER:
+                twiml = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    "<Response>"
+                    f"<Say>Hi {contact[1]}, let me get Bharath for you now.</Say>"
+                    f"<Dial>{TRANSFER_PHONE_NUMBER}</Dial>"
+                    "</Response>"
+                )
+            else:
+                twiml = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    "<Response>"
+                    f"<Say>Hi {contact[1]}, I'll let Bharath know right away.</Say>"
+                    "</Response>"
+                )
+            return Response(content=twiml, media_type="application/xml")
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -221,12 +369,41 @@ def voice(CallSid: str = Form(...), From: str = Form(...)):
 
 
 @app.post("/voice/intro")
-def voice_intro(CallSid: str = Form(...), SpeechResult: str = Form("")):
+def voice_intro(
+    CallSid: str = Form(...), SpeechResult: str = Form(""), retry: int = 0
+):
+    if not SpeechResult.strip() and retry < MAX_SILENCE_RETRIES:
+        return gather_response(
+            "Sorry, I didn't catch that. Who's calling and what is this regarding?",
+            f"/voice/intro?retry={retry + 1}",
+        )
+
+    if not SpeechResult.strip():
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE calls
+                    SET status = 'no_response', ended_at = now()
+                    WHERE call_sid = %s;
+                    """,
+                    (CallSid,),
+                )
+            conn.commit()
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            "<Say>I'm having trouble hearing you. Please try calling back. Goodbye.</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+        return Response(content=twiml, media_type="application/xml")
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE calls SET caller_name = %s, reason = %s WHERE call_sid = %s;",
-                (SpeechResult or None, SpeechResult or None, CallSid),
+                (SpeechResult, SpeechResult, CallSid),
             )
         conn.commit()
 
@@ -238,7 +415,14 @@ def voice_urgency(
     background_tasks: BackgroundTasks,
     CallSid: str = Form(...),
     SpeechResult: str = Form(""),
+    retry: int = 0,
 ):
+    if not SpeechResult.strip() and retry < MAX_SILENCE_RETRIES:
+        return gather_response(
+            "Sorry, I didn't catch that. Is this urgent?",
+            f"/voice/urgency?retry={retry + 1}",
+        )
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -299,13 +483,17 @@ def get_calls(limit: int = 20):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, phone_number, caller_name, reason, urgency,
-                       started_at, ended_at, status,
-                       ai_name, ai_company, ai_type, ai_intent,
-                       ai_priority, ai_message, ai_error,
-                       ai_recommended_action, dismissed_at
+                SELECT calls.id, calls.phone_number, calls.caller_name,
+                       calls.reason, calls.urgency, calls.started_at,
+                       calls.ended_at, calls.status,
+                       calls.ai_name, calls.ai_company, calls.ai_type,
+                       calls.ai_intent, calls.ai_priority, calls.ai_message,
+                       calls.ai_error, calls.ai_recommended_action,
+                       calls.dismissed_at, calls.decided_action,
+                       calls.matched_contact_id, contacts.name
                 FROM calls
-                ORDER BY started_at DESC
+                LEFT JOIN contacts ON contacts.id = calls.matched_contact_id
+                ORDER BY calls.started_at DESC
                 LIMIT %s;
                 """,
                 (limit,),
@@ -330,6 +518,9 @@ def get_calls(limit: int = 20):
             "ai_error": row[14],
             "ai_recommended_action": row[15],
             "dismissed_at": row[16].isoformat() if row[16] else None,
+            "decided_action": row[17],
+            "matched_contact_id": row[18],
+            "matched_contact_name": row[19],
         }
         for row in rows
     ]
@@ -370,3 +561,86 @@ def delete_old_calls(days: int = 30):
             deleted = cur.rowcount
         conn.commit()
     return {"deleted": deleted}
+
+
+@app.get("/contacts")
+def get_contacts():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, name, phone_number, relationship, priority, created_at
+                FROM contacts
+                ORDER BY name;
+                """
+            )
+            rows = cur.fetchall()
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "phone_number": row[2],
+            "relationship": row[3],
+            "priority": row[4],
+            "created_at": row[5].isoformat(),
+        }
+        for row in rows
+    ]
+
+
+@app.post("/contacts")
+def create_contact(contact: ContactCreate):
+    if contact.relationship not in CALLER_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"relationship must be one of {CALLER_TYPES}",
+        )
+    if contact.priority not in CONTACT_PRIORITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"priority must be one of {CONTACT_PRIORITIES}",
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO contacts (name, phone_number, relationship, priority)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, name, phone_number, relationship, priority, created_at;
+                    """,
+                    (
+                        contact.name,
+                        contact.phone_number,
+                        contact.relationship,
+                        contact.priority,
+                    ),
+                )
+            except psycopg.errors.UniqueViolation:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A contact with this phone number already exists",
+                )
+            row = cur.fetchone()
+        conn.commit()
+    return {
+        "id": row[0],
+        "name": row[1],
+        "phone_number": row[2],
+        "relationship": row[3],
+        "priority": row[4],
+        "created_at": row[5].isoformat(),
+    }
+
+
+@app.delete("/contacts/{contact_id}")
+def delete_contact(contact_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM contacts WHERE id = %s;", (contact_id,))
+            deleted = cur.rowcount
+        conn.commit()
+    if deleted == 0:
+        return Response(status_code=404)
+    return {"deleted": True}

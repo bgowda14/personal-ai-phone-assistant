@@ -6,11 +6,13 @@
 - ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
 - Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
 - Real-time updates without reopening the app (Phase 11: push notifications) — for now the app refreshes on load, pull-to-refresh, and when it comes back to the foreground
-- Phase 8: contacts + rules engine (family/friend/recruiter/etc. routing rules, currently the AI only classifies — nothing acts on the classification yet)
+- Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
+- A call abandoned before it finishes (caller hangs up mid-flow) is still stuck at `status='in_progress'` forever
+- Phase 9: reliable transfer logic for non-contact callers too (busy/no-answer/declined handling), then Phase 9.5 (forward the real main number — only after Phase 9 is proven reliable)
 
 ## In Progress
 
-(nothing — Phase 7 complete, Phase 8 not started)
+(nothing — Phase 8 complete, Phase 9 not started)
 
 ## Done
 
@@ -44,6 +46,11 @@
 - Added a full "All Calls" history page (separate from the Recent Calls preview) with a back button, absolute date/time per call, and a "Delete calls older than 30 days" button (`DELETE /calls/old`, confirmed before running)
 - Added auto-refresh when the app returns to the foreground, so it doesn't show stale data after backgrounding it to make a call
 - Verified the whole thing end to end on-device: real call classified correctly, Call Back dialed the real caller, Dismiss persisted, All Calls page showed correct history with working delete-old-calls
+- Added `contacts` table + `GET/POST/DELETE /contacts` + a Contacts screen in the app (add/view/remove people with name, phone, relationship, priority)
+- Built a real rule engine (`decide_action`) implementing the plan's Available/Busy/Sleeping decision matrix exactly — unit-tested against all matrix rows plus edge cases, all passing
+- Known spam contacts now get auto-rejected at the very first ring — no AI, no questions, instant hangup
+- Known important contacts (e.g. family) whose rule says TRANSFER now get a live transfer — skips the interrogation entirely and actually rings a real phone via Twilio `<Dial>`, confirmed working on a real call (Milestone 7: AI assistant transferred a real call)
+- Fixed a real bug caught live: silence on a question was being treated as an answer and the call moved on anyway — now it re-asks up to twice before giving up gracefully instead of barreling through the script
 
 ## Bugs
 

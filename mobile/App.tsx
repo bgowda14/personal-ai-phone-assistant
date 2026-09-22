@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -26,6 +27,26 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
+
+const RELATIONSHIP_OPTIONS = [
+  'family',
+  'friend',
+  'recruiter',
+  'delivery',
+  'apartment',
+  'unknown',
+  'spam',
+] as const;
+
+const PRIORITY_OPTIONS = ['critical', 'high', 'normal', 'low'] as const;
+
+const DECISION_LABELS: Record<string, string> = {
+  TRANSFER: 'Would Transfer',
+  TAKE_MESSAGE: 'Take Message',
+  SCREEN: 'Screening',
+  REJECT: 'Rejected',
+  ASK_ME: 'Ask Me',
+};
 
 type Call = {
   id: number;
@@ -45,6 +66,18 @@ type Call = {
   ai_error: string | null;
   ai_recommended_action: string | null;
   dismissed_at: string | null;
+  decided_action: string | null;
+  matched_contact_id: number | null;
+  matched_contact_name: string | null;
+};
+
+type Contact = {
+  id: number;
+  name: string;
+  phone_number: string;
+  relationship: string;
+  priority: string;
+  created_at: string;
 };
 
 function timeAgo(isoString: string): string {
@@ -79,7 +112,8 @@ function CallCard({
   onCallBack: (phoneNumber: string) => void;
   onDismiss: (callId: number) => void;
 }) {
-  const name = call.ai_name || call.caller_name || call.phone_number;
+  const name =
+    call.matched_contact_name || call.ai_name || call.caller_name || call.phone_number;
   const message = call.ai_message || call.reason;
   const dismissed = !!call.dismissed_at;
 
@@ -104,6 +138,19 @@ function CallCard({
       )}
       <View style={styles.callMetaRow}>
         <View style={styles.callBadgeRow}>
+          {call.decided_action && (
+            <Text
+              style={[
+                styles.decisionBadge,
+                call.decided_action === 'TRANSFER' &&
+                  styles.decisionBadgeTransfer,
+                call.decided_action === 'REJECT' &&
+                  styles.decisionBadgeReject,
+              ]}
+            >
+              {DECISION_LABELS[call.decided_action] || call.decided_action}
+            </Text>
+          )}
           {call.ai_type && (
             <Text style={styles.callTypeBadge}>{call.ai_type}</Text>
           )}
@@ -149,7 +196,7 @@ function CallCard({
 const ALL_CALLS_LIMIT = 200;
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'allCalls'>('home');
+  const [view, setView] = useState<'home' | 'allCalls' | 'contacts'>('home');
   const [status, setStatus] = useState<Status>('Available');
   const [error, setError] = useState<string | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -157,6 +204,17 @@ export default function App() {
   const [allCalls, setAllCalls] = useState<Call[]>([]);
   const [allCallsError, setAllCallsError] = useState<string | null>(null);
   const [allCallsLoading, setAllCallsLoading] = useState(false);
+
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newRelationship, setNewRelationship] =
+    useState<(typeof RELATIONSHIP_OPTIONS)[number]>('friend');
+  const [newPriority, setNewPriority] =
+    useState<(typeof PRIORITY_OPTIONS)[number]>('normal');
+  const [addingContact, setAddingContact] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -178,16 +236,87 @@ export default function App() {
       .finally(() => setAllCallsLoading(false));
   };
 
+  const loadContacts = () => {
+    setContactsError(null);
+    setContactsLoading(true);
+    return fetch(`${API_BASE_URL}/contacts`)
+      .then((res) => res.json())
+      .then((data) => setContacts(data))
+      .catch(() => setContactsError('Could not load contacts'))
+      .finally(() => setContactsLoading(false));
+  };
+
   const openAllCalls = () => {
     setView('allCalls');
     loadAllCalls();
   };
 
+  const openContacts = () => {
+    setView('contacts');
+    loadContacts();
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
-    (view === 'allCalls' ? loadAllCalls() : loadCalls()).finally(() =>
-      setRefreshing(false)
-    );
+    const reload =
+      view === 'allCalls'
+        ? loadAllCalls()
+        : view === 'contacts'
+        ? loadContacts()
+        : loadCalls();
+    reload.finally(() => setRefreshing(false));
+  };
+
+  const addContact = () => {
+    if (!newName.trim() || !newPhone.trim()) {
+      setContactsError('Name and phone number are required');
+      return;
+    }
+    setAddingContact(true);
+    setContactsError(null);
+    fetch(`${API_BASE_URL}/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newName.trim(),
+        phone_number: newPhone.trim(),
+        relationship: newRelationship,
+        priority: newPriority,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
+      .then(() => {
+        setNewName('');
+        setNewPhone('');
+        setNewRelationship('friend');
+        setNewPriority('normal');
+        return loadContacts();
+      })
+      .catch(() =>
+        setContactsError(
+          'Could not add contact — check the phone number isn\'t already used'
+        )
+      )
+      .finally(() => setAddingContact(false));
+  };
+
+  const confirmDeleteContact = (contactId: number, name: string) => {
+    Alert.alert('Delete contact', `Remove ${name} from contacts?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setContacts((prev) => prev.filter((c) => c.id !== contactId));
+          fetch(`${API_BASE_URL}/contacts/${contactId}`, {
+            method: 'DELETE',
+          }).catch(() => setContactsError('Could not delete contact'));
+        },
+      },
+    ]);
   };
 
   const callBack = (phoneNumber: string) => {
@@ -309,6 +438,123 @@ export default function App() {
     );
   }
 
+  if (view === 'contacts') {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <StatusBar style="auto" />
+        <View style={styles.allCallsHeader}>
+          <Pressable onPress={() => setView('home')} hitSlop={8}>
+            <Text style={styles.backLink}>{'< Back'}</Text>
+          </Pressable>
+          <Text style={styles.allCallsTitle}>Contacts</Text>
+          <View style={styles.backLinkSpacer} />
+        </View>
+
+        <View style={styles.addContactForm}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Name"
+            value={newName}
+            onChangeText={setNewName}
+          />
+          <TextInput
+            style={styles.textInput}
+            placeholder="+15551234567"
+            value={newPhone}
+            onChangeText={setNewPhone}
+            keyboardType="phone-pad"
+          />
+          <Text style={styles.formLabel}>Relationship</Text>
+          <View style={styles.chipRow}>
+            {RELATIONSHIP_OPTIONS.map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.chip,
+                  newRelationship === option && styles.chipActive,
+                ]}
+                onPress={() => setNewRelationship(option)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    newRelationship === option && styles.chipTextActive,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.formLabel}>Priority</Text>
+          <View style={styles.chipRow}>
+            {PRIORITY_OPTIONS.map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.chip,
+                  newPriority === option && styles.chipActive,
+                ]}
+                onPress={() => setNewPriority(option)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    newPriority === option && styles.chipTextActive,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {contactsError && <Text style={styles.error}>{contactsError}</Text>}
+          <Pressable
+            style={styles.addContactButton}
+            onPress={addContact}
+            disabled={addingContact}
+          >
+            <Text style={styles.callActionText}>
+              {addingContact ? 'Adding...' : 'Add Contact'}
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.sectionTitle}>All Contacts</Text>
+        {contactsLoading && <Text style={styles.emptyText}>Loading...</Text>}
+        {!contactsLoading && contacts.length === 0 && (
+          <Text style={styles.emptyText}>No contacts yet</Text>
+        )}
+        <View style={styles.callList}>
+          {contacts.map((contact) => (
+            <View key={contact.id} style={styles.contactCard}>
+              <View style={styles.callNameColumn}>
+                <Text style={styles.callName}>{contact.name}</Text>
+                <Text style={styles.callCompany}>{contact.phone_number}</Text>
+              </View>
+              <View style={styles.contactBadgeColumn}>
+                <Text style={styles.callTypeBadge}>{contact.relationship}</Text>
+                <Text style={styles.callPriorityBadge}>{contact.priority}</Text>
+              </View>
+              <Pressable
+                hitSlop={8}
+                onPress={() => confirmDeleteContact(contact.id, contact.name)}
+              >
+                <Text style={styles.deleteContactLink}>Remove</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.container}
@@ -345,6 +591,14 @@ export default function App() {
           </Pressable>
         ))}
       </View>
+
+      <Pressable
+        style={styles.manageContactsLink}
+        onPress={openContacts}
+        hitSlop={8}
+      >
+        <Text style={styles.viewAllLink}>Manage Contacts</Text>
+      </Pressable>
 
       <View style={styles.sectionTitleRow}>
         <Text style={styles.sectionTitle}>Recent Calls</Text>
@@ -442,6 +696,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#1a5276',
   },
+  manageContactsLink: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginTop: 12,
+  },
   allCallsHeader: {
     width: '100%',
     flexDirection: 'row',
@@ -536,8 +795,27 @@ const styles = StyleSheet.create({
   },
   callBadgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     gap: 8,
     alignItems: 'center',
+  },
+  decisionBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#444',
+    backgroundColor: '#eee',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  decisionBadgeTransfer: {
+    color: '#fff',
+    backgroundColor: '#1a5276',
+  },
+  decisionBadgeReject: {
+    color: '#fff',
+    backgroundColor: '#c0392b',
   },
   callTypeBadge: {
     fontSize: 11,
@@ -597,5 +875,84 @@ const styles = StyleSheet.create({
   },
   callActionGhostText: {
     color: '#444',
+  },
+  addContactForm: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: '#fff',
+    marginBottom: 24,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    marginBottom: 10,
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff',
+  },
+  chipActive: {
+    backgroundColor: '#111',
+    borderColor: '#111',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#444',
+    textTransform: 'capitalize',
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+  addContactButton: {
+    marginTop: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#111',
+  },
+  contactCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: '#fff',
+  },
+  contactBadgeColumn: {
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+  deleteContactLink: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#c0392b',
+    marginLeft: 12,
   },
 });
