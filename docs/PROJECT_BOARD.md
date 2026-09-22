@@ -5,12 +5,12 @@
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
 - ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
 - Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
-- Phase 7: call summaries + [Call Back]/[Dismiss] actions in the mobile app
+- Real-time updates without reopening the app (Phase 11: push notifications) — for now the app refreshes on load, pull-to-refresh, and when it comes back to the foreground
 - Phase 8: contacts + rules engine (family/friend/recruiter/etc. routing rules, currently the AI only classifies — nothing acts on the classification yet)
 
 ## In Progress
 
-(nothing — Phase 6 complete, Phase 7 not started)
+(nothing — Phase 7 complete, Phase 8 not started)
 
 ## Done
 
@@ -39,6 +39,11 @@
 - Connected OpenAI (structured outputs / JSON schema) to classify each call's raw speech into name, company, caller type, intent, priority, and a one-line message — runs in the background after the call so it doesn't add latency to the live call
 - Collapsed the intro flow from two separate questions ("who's calling?" then "what is this regarding?") into one combined question, matching how people actually answer it — real caller feedback during testing showed the old flow made them repeat themselves
 - Tested against the plan's own worked examples (Mike/basketball, Sarah/Stripe recruiter) plus two real calls, confirming correct name/company/type/priority/message extraction (Milestone 5: a real natural-language conversation understood by the AI)
+- Added `ai_recommended_action` to the AI classification (e.g. "Call back today") and a `dismissed_at` column + `POST /calls/{id}/dismiss` endpoint
+- Added [Call Back] (opens the phone dialer via `tel:`) and [Dismiss] buttons to each call card, and a "Recommended" line showing the AI's suggestion
+- Added a full "All Calls" history page (separate from the Recent Calls preview) with a back button, absolute date/time per call, and a "Delete calls older than 30 days" button (`DELETE /calls/old`, confirmed before running)
+- Added auto-refresh when the app returns to the foreground, so it doesn't show stale data after backgrounding it to make a call
+- Verified the whole thing end to end on-device: real call classified correctly, Call Back dialed the real caller, Dismiss persisted, All Calls page showed correct history with working delete-old-calls
 
 ## Bugs
 

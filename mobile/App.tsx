@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  Alert,
+  AppState,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -40,6 +43,8 @@ type Call = {
   ai_priority: string | null;
   ai_message: string | null;
   ai_error: string | null;
+  ai_recommended_action: string | null;
+  dismissed_at: string | null;
 };
 
 function timeAgo(isoString: string): string {
@@ -53,11 +58,105 @@ function timeAgo(isoString: string): string {
   return `${days}d ago`;
 }
 
+function formatDateTime(isoString: string): string {
+  return new Date(isoString).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function CallCard({
+  call,
+  showDateTime,
+  onCallBack,
+  onDismiss,
+}: {
+  call: Call;
+  showDateTime?: boolean;
+  onCallBack: (phoneNumber: string) => void;
+  onDismiss: (callId: number) => void;
+}) {
+  const name = call.ai_name || call.caller_name || call.phone_number;
+  const message = call.ai_message || call.reason;
+  const dismissed = !!call.dismissed_at;
+
+  return (
+    <View style={[styles.callCard, dismissed && styles.callCardDismissed]}>
+      <View style={styles.callCardHeader}>
+        <View style={styles.callNameColumn}>
+          <Text style={styles.callName}>{name}</Text>
+          {call.ai_company && (
+            <Text style={styles.callCompany}>{call.ai_company}</Text>
+          )}
+        </View>
+        <Text style={styles.callTime}>
+          {showDateTime ? formatDateTime(call.started_at) : timeAgo(call.started_at)}
+        </Text>
+      </View>
+      {message && <Text style={styles.callReason}>{message}</Text>}
+      {call.ai_recommended_action && (
+        <Text style={styles.callRecommendation}>
+          Recommended: {call.ai_recommended_action}
+        </Text>
+      )}
+      <View style={styles.callMetaRow}>
+        <View style={styles.callBadgeRow}>
+          {call.ai_type && (
+            <Text style={styles.callTypeBadge}>{call.ai_type}</Text>
+          )}
+          {call.ai_priority ? (
+            <Text
+              style={[
+                styles.callPriorityBadge,
+                call.ai_priority === 'high' && styles.callPriorityHigh,
+              ]}
+            >
+              {call.ai_priority}
+            </Text>
+          ) : call.urgency ? (
+            <Text style={styles.callUrgency}>Urgent: {call.urgency}</Text>
+          ) : null}
+        </View>
+        <Text style={styles.callStatus}>
+          {dismissed ? 'dismissed' : call.status}
+        </Text>
+      </View>
+      {!dismissed && (
+        <View style={styles.callActionRow}>
+          <Pressable
+            style={styles.callActionButton}
+            onPress={() => onCallBack(call.phone_number)}
+          >
+            <Text style={styles.callActionText}>Call Back</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.callActionButton, styles.callActionGhost]}
+            onPress={() => onDismiss(call.id)}
+          >
+            <Text style={[styles.callActionText, styles.callActionGhostText]}>
+              Dismiss
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const ALL_CALLS_LIMIT = 200;
+
 export default function App() {
+  const [view, setView] = useState<'home' | 'allCalls'>('home');
   const [status, setStatus] = useState<Status>('Available');
   const [error, setError] = useState<string | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
   const [callsError, setCallsError] = useState<string | null>(null);
+  const [allCalls, setAllCalls] = useState<Call[]>([]);
+  const [allCallsError, setAllCallsError] = useState<string | null>(null);
+  const [allCallsLoading, setAllCallsLoading] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -69,9 +168,63 @@ export default function App() {
       .catch(() => setCallsError('Could not load recent calls'));
   };
 
+  const loadAllCalls = () => {
+    setAllCallsError(null);
+    setAllCallsLoading(true);
+    return fetch(`${API_BASE_URL}/calls?limit=${ALL_CALLS_LIMIT}`)
+      .then((res) => res.json())
+      .then((data) => setAllCalls(data))
+      .catch(() => setAllCallsError('Could not load call history'))
+      .finally(() => setAllCallsLoading(false));
+  };
+
+  const openAllCalls = () => {
+    setView('allCalls');
+    loadAllCalls();
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
-    loadCalls().finally(() => setRefreshing(false));
+    (view === 'allCalls' ? loadAllCalls() : loadCalls()).finally(() =>
+      setRefreshing(false)
+    );
+  };
+
+  const callBack = (phoneNumber: string) => {
+    Linking.openURL(`tel:${phoneNumber}`).catch(() =>
+      setCallsError('Could not open phone dialer')
+    );
+  };
+
+  const dismissCall = (callId: number) => {
+    const dismissedAt = new Date().toISOString();
+    const markDismissed = (list: Call[]) =>
+      list.map((call) =>
+        call.id === callId ? { ...call, dismissed_at: dismissedAt } : call
+      );
+    setCalls(markDismissed);
+    setAllCalls(markDismissed);
+    fetch(`${API_BASE_URL}/calls/${callId}/dismiss`, { method: 'POST' }).catch(
+      () => setCallsError('Could not dismiss call')
+    );
+  };
+
+  const deleteOldCalls = () => {
+    fetch(`${API_BASE_URL}/calls/old?days=30`, { method: 'DELETE' })
+      .then((res) => res.json())
+      .then(() => loadAllCalls())
+      .catch(() => setAllCallsError('Could not delete old calls'));
+  };
+
+  const confirmDeleteOldCalls = () => {
+    Alert.alert(
+      'Delete old calls',
+      'Delete all calls older than 30 days? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: deleteOldCalls },
+      ]
+    );
   };
 
   useEffect(() => {
@@ -83,6 +236,20 @@ export default function App() {
     loadCalls();
   }, []);
 
+  // Refresh Recent Calls whenever the app comes back to the foreground
+  // (e.g. after backgrounding it to make a phone call). Real-time push
+  // updates without reopening the app is a bigger feature for later.
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appState.current !== 'active' && nextState === 'active') {
+        loadCalls();
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, []);
+
   const updateStatus = (option: Status) => {
     setStatus(option);
     setError(null);
@@ -92,6 +259,55 @@ export default function App() {
       body: JSON.stringify({ mode: option }),
     }).catch(() => setError('Could not reach backend'));
   };
+
+  if (view === 'allCalls') {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <StatusBar style="auto" />
+        <View style={styles.allCallsHeader}>
+          <Pressable onPress={() => setView('home')} hitSlop={8}>
+            <Text style={styles.backLink}>{'< Back'}</Text>
+          </Pressable>
+          <Text style={styles.allCallsTitle}>All Calls</Text>
+          <View style={styles.backLinkSpacer} />
+        </View>
+
+        <Pressable
+          style={styles.deleteOldButton}
+          onPress={confirmDeleteOldCalls}
+        >
+          <Text style={styles.deleteOldButtonText}>
+            Delete calls older than 30 days
+          </Text>
+        </Pressable>
+
+        {allCallsError && <Text style={styles.error}>{allCallsError}</Text>}
+        {allCallsLoading && (
+          <Text style={styles.emptyText}>Loading...</Text>
+        )}
+        {!allCallsLoading && !allCallsError && allCalls.length === 0 && (
+          <Text style={styles.emptyText}>No calls yet</Text>
+        )}
+        <View style={styles.callList}>
+          {allCalls.map((call) => (
+            <CallCard
+              key={call.id}
+              call={call}
+              showDateTime
+              onCallBack={callBack}
+              onDismiss={dismissCall}
+            />
+          ))}
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -130,53 +346,25 @@ export default function App() {
         ))}
       </View>
 
-      <Text style={styles.sectionTitle}>Recent Calls</Text>
+      <View style={styles.sectionTitleRow}>
+        <Text style={styles.sectionTitle}>Recent Calls</Text>
+        <Pressable onPress={openAllCalls} hitSlop={8}>
+          <Text style={styles.viewAllLink}>View All Calls</Text>
+        </Pressable>
+      </View>
       {callsError && <Text style={styles.error}>{callsError}</Text>}
       {!callsError && calls.length === 0 && (
         <Text style={styles.emptyText}>No calls yet</Text>
       )}
       <View style={styles.callList}>
-        {calls.map((call) => {
-          const name = call.ai_name || call.caller_name || call.phone_number;
-          const message = call.ai_message || call.reason;
-          return (
-            <View key={call.id} style={styles.callCard}>
-              <View style={styles.callCardHeader}>
-                <View style={styles.callNameColumn}>
-                  <Text style={styles.callName}>{name}</Text>
-                  {call.ai_company && (
-                    <Text style={styles.callCompany}>{call.ai_company}</Text>
-                  )}
-                </View>
-                <Text style={styles.callTime}>{timeAgo(call.started_at)}</Text>
-              </View>
-              {message && <Text style={styles.callReason}>{message}</Text>}
-              <View style={styles.callMetaRow}>
-                <View style={styles.callBadgeRow}>
-                  {call.ai_type && (
-                    <Text style={styles.callTypeBadge}>{call.ai_type}</Text>
-                  )}
-                  {call.ai_priority ? (
-                    <Text
-                      style={[
-                        styles.callPriorityBadge,
-                        call.ai_priority === 'high' &&
-                          styles.callPriorityHigh,
-                      ]}
-                    >
-                      {call.ai_priority}
-                    </Text>
-                  ) : call.urgency ? (
-                    <Text style={styles.callUrgency}>
-                      Urgent: {call.urgency}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.callStatus}>{call.status}</Text>
-              </View>
-            </View>
-          );
-        })}
+        {calls.map((call) => (
+          <CallCard
+            key={call.id}
+            call={call}
+            onCallBack={callBack}
+            onDismiss={dismissCall}
+          />
+        ))}
       </View>
     </ScrollView>
   );
@@ -237,12 +425,56 @@ const styles = StyleSheet.create({
   buttonTextActive: {
     color: '#fff',
   },
+  sectionTitleRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    alignSelf: 'flex-start',
-    marginTop: 40,
-    marginBottom: 12,
+  },
+  viewAllLink: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1a5276',
+  },
+  allCallsHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  allCallsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  backLink: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1a5276',
+  },
+  backLinkSpacer: {
+    width: 48,
+  },
+  deleteOldButton: {
+    width: '100%',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c0392b',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  deleteOldButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#c0392b',
   },
   emptyText: {
     fontSize: 14,
@@ -259,6 +491,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     backgroundColor: '#fff',
+  },
+  callCardDismissed: {
+    opacity: 0.5,
   },
   callCardHeader: {
     flexDirection: 'row',
@@ -285,6 +520,12 @@ const styles = StyleSheet.create({
   callReason: {
     fontSize: 14,
     color: '#333',
+    marginTop: 6,
+  },
+  callRecommendation: {
+    fontSize: 13,
+    color: '#1a5276',
+    fontWeight: '500',
     marginTop: 6,
   },
   callMetaRow: {
@@ -331,5 +572,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     textTransform: 'capitalize',
+  },
+  callActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  callActionButton: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#111',
+  },
+  callActionGhost: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  callActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  callActionGhostText: {
+    color: '#444',
   },
 });

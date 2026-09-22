@@ -59,6 +59,14 @@ CALL_CLASSIFICATION_SCHEMA = {
             "type": "string",
             "description": "One-sentence message to relay to Bharath, in the caller's own words where possible.",
         },
+        "recommended_action": {
+            "type": "string",
+            "description": (
+                "Short recommendation for Bharath, e.g. 'Call back today', "
+                "'No action needed', 'Reply when free'. This is a suggestion "
+                "only — Bharath decides what actually happens."
+            ),
+        },
     },
     "required": [
         "caller_name",
@@ -67,6 +75,7 @@ CALL_CLASSIFICATION_SCHEMA = {
         "intent",
         "priority",
         "message",
+        "recommended_action",
     ],
     "additionalProperties": False,
 }
@@ -137,7 +146,7 @@ def classify_call(call_sid: str) -> None:
                     UPDATE calls
                     SET ai_name = %s, ai_company = %s, ai_type = %s,
                         ai_intent = %s, ai_priority = %s, ai_message = %s,
-                        ai_error = NULL
+                        ai_recommended_action = %s, ai_error = NULL
                     WHERE call_sid = %s;
                     """,
                     (
@@ -147,6 +156,7 @@ def classify_call(call_sid: str) -> None:
                         result["intent"],
                         result["priority"],
                         result["message"],
+                        result["recommended_action"],
                         call_sid,
                     ),
                 )
@@ -283,7 +293,8 @@ def set_status(update: StatusUpdate):
 
 
 @app.get("/calls")
-def get_calls():
+def get_calls(limit: int = 20):
+    limit = max(1, min(limit, 500))
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -291,11 +302,13 @@ def get_calls():
                 SELECT id, phone_number, caller_name, reason, urgency,
                        started_at, ended_at, status,
                        ai_name, ai_company, ai_type, ai_intent,
-                       ai_priority, ai_message, ai_error
+                       ai_priority, ai_message, ai_error,
+                       ai_recommended_action, dismissed_at
                 FROM calls
                 ORDER BY started_at DESC
-                LIMIT 20;
-                """
+                LIMIT %s;
+                """,
+                (limit,),
             )
             rows = cur.fetchall()
     return [
@@ -315,6 +328,45 @@ def get_calls():
             "ai_priority": row[12],
             "ai_message": row[13],
             "ai_error": row[14],
+            "ai_recommended_action": row[15],
+            "dismissed_at": row[16].isoformat() if row[16] else None,
         }
         for row in rows
     ]
+
+
+@app.post("/calls/{call_id}/dismiss")
+def dismiss_call(call_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE calls
+                SET dismissed_at = now()
+                WHERE id = %s
+                RETURNING dismissed_at;
+                """,
+                (call_id,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    if row is None:
+        return Response(status_code=404)
+    return {"dismissed_at": row[0].isoformat()}
+
+
+@app.delete("/calls/old")
+def delete_old_calls(days: int = 30):
+    days = max(1, min(days, 3650))
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM calls
+                WHERE started_at < now() - make_interval(days => %s);
+                """,
+                (days,),
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    return {"deleted": deleted}
