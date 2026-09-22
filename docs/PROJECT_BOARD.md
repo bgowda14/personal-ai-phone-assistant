@@ -5,11 +5,12 @@
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
 - ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
 - Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
-- Phase 6: real AI conversation (replace raw speech-to-text capture with OpenAI classification of name/company/intent/priority)
+- Phase 7: call summaries + [Call Back]/[Dismiss] actions in the mobile app
+- Phase 8: contacts + rules engine (family/friend/recruiter/etc. routing rules, currently the AI only classifies — nothing acts on the classification yet)
 
 ## In Progress
 
-(nothing — Phase 5 complete, Phase 6 not started)
+(nothing — Phase 6 complete, Phase 7 not started)
 
 ## Done
 
@@ -35,6 +36,9 @@
 - `/voice` flow now asks who's calling, what it's regarding, and whether it's urgent, storing each answer as the call progresses
 - Added `GET /calls` endpoint and a "Recent Calls" section in the mobile app
 - Tested the full flow on a real call to +1 443-300-0069 and confirmed it appeared via `GET /calls` (Milestone 6: a call appeared inside the mobile app automatically)
+- Connected OpenAI (structured outputs / JSON schema) to classify each call's raw speech into name, company, caller type, intent, priority, and a one-line message — runs in the background after the call so it doesn't add latency to the live call
+- Collapsed the intro flow from two separate questions ("who's calling?" then "what is this regarding?") into one combined question, matching how people actually answer it — real caller feedback during testing showed the old flow made them repeat themselves
+- Tested against the plan's own worked examples (Mike/basketball, Sarah/Stripe recruiter) plus two real calls, confirming correct name/company/type/priority/message extraction (Milestone 5: a real natural-language conversation understood by the AI)
 
 ## Bugs
 

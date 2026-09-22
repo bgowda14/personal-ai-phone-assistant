@@ -33,6 +33,13 @@ type Call = {
   started_at: string;
   ended_at: string | null;
   status: string;
+  ai_name: string | null;
+  ai_company: string | null;
+  ai_type: string | null;
+  ai_intent: string | null;
+  ai_priority: string | null;
+  ai_message: string | null;
+  ai_error: string | null;
 };
 
 function timeAgo(isoString: string): string {
@@ -129,25 +136,47 @@ export default function App() {
         <Text style={styles.emptyText}>No calls yet</Text>
       )}
       <View style={styles.callList}>
-        {calls.map((call) => (
-          <View key={call.id} style={styles.callCard}>
-            <View style={styles.callCardHeader}>
-              <Text style={styles.callName}>
-                {call.caller_name || call.phone_number}
-              </Text>
-              <Text style={styles.callTime}>{timeAgo(call.started_at)}</Text>
+        {calls.map((call) => {
+          const name = call.ai_name || call.caller_name || call.phone_number;
+          const message = call.ai_message || call.reason;
+          return (
+            <View key={call.id} style={styles.callCard}>
+              <View style={styles.callCardHeader}>
+                <View style={styles.callNameColumn}>
+                  <Text style={styles.callName}>{name}</Text>
+                  {call.ai_company && (
+                    <Text style={styles.callCompany}>{call.ai_company}</Text>
+                  )}
+                </View>
+                <Text style={styles.callTime}>{timeAgo(call.started_at)}</Text>
+              </View>
+              {message && <Text style={styles.callReason}>{message}</Text>}
+              <View style={styles.callMetaRow}>
+                <View style={styles.callBadgeRow}>
+                  {call.ai_type && (
+                    <Text style={styles.callTypeBadge}>{call.ai_type}</Text>
+                  )}
+                  {call.ai_priority ? (
+                    <Text
+                      style={[
+                        styles.callPriorityBadge,
+                        call.ai_priority === 'high' &&
+                          styles.callPriorityHigh,
+                      ]}
+                    >
+                      {call.ai_priority}
+                    </Text>
+                  ) : call.urgency ? (
+                    <Text style={styles.callUrgency}>
+                      Urgent: {call.urgency}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.callStatus}>{call.status}</Text>
+              </View>
             </View>
-            {call.reason && (
-              <Text style={styles.callReason}>{call.reason}</Text>
-            )}
-            <View style={styles.callMetaRow}>
-              {call.urgency && (
-                <Text style={styles.callUrgency}>Urgent: {call.urgency}</Text>
-              )}
-              <Text style={styles.callStatus}>{call.status}</Text>
-            </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </ScrollView>
   );
@@ -234,12 +263,20 @@ const styles = StyleSheet.create({
   callCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  callNameColumn: {
+    flexShrink: 1,
   },
   callName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111',
+  },
+  callCompany: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
   },
   callTime: {
     fontSize: 12,
@@ -253,7 +290,37 @@ const styles = StyleSheet.create({
   callMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
+  },
+  callBadgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  callTypeBadge: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#444',
+    backgroundColor: '#eee',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    textTransform: 'capitalize',
+  },
+  callPriorityBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+    backgroundColor: '#eee',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    textTransform: 'capitalize',
+  },
+  callPriorityHigh: {
+    color: '#fff',
+    backgroundColor: '#c0392b',
   },
   callUrgency: {
     fontSize: 12,
