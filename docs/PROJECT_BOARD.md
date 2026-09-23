@@ -7,12 +7,12 @@
 - Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
 - Real-time updates without reopening the app (Phase 11: push notifications) — for now the app refreshes on load, pull-to-refresh, and when it comes back to the foreground
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
-- A call abandoned before it finishes (caller hangs up mid-flow) is still stuck at `status='in_progress'` forever
-- Phase 9: reliable transfer logic for non-contact callers too (busy/no-answer/declined handling), then Phase 9.5 (forward the real main number — only after Phase 9 is proven reliable)
+- A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
+- Phase 9.5: forward the real main US Mobile number to Twilio — only after Phase 9 has had more real-world use to build confidence
 
 ## In Progress
 
-(nothing — Phase 8 complete, Phase 9 not started)
+(nothing — Phase 9 complete, Phase 9.5 not started)
 
 ## Done
 
@@ -51,6 +51,12 @@
 - Known spam contacts now get auto-rejected at the very first ring — no AI, no questions, instant hangup
 - Known important contacts (e.g. family) whose rule says TRANSFER now get a live transfer — skips the interrogation entirely and actually rings a real phone via Twilio `<Dial>`, confirmed working on a real call (Milestone 7: AI assistant transferred a real call)
 - Fixed a real bug caught live: silence on a question was being treated as an answer and the call moved on anyway — now it re-asks up to twice before giving up gracefully instead of barreling through the script
+- Moved AI classification from a post-hangup background task into the live call flow, so a decision (including whether to transfer) is known while the caller is still on the line, not after
+- Real callers (not just known contacts) whose call is classified as TRANSFER now get a live `<Dial>` transfer with a personalized greeting, instead of just a "goodbye" hangup
+- Added a transfer completion callback (`/voice/transfer-complete`) handling answered/no-answer/busy/failed/canceled outcomes — a failed transfer now tells the caller Bharath isn't available and their message was already noted, instead of just dropping them
+- Fixed a real bug caught live: an urgent unknown caller (Available mode) wasn't transferring because `unknown` caller type didn't match the plan's Available-mode transfer list — added an explicit rule: Available + urgent always transfers, regardless of caller type (except spam)
+- Fixed a real bug caught live: `speechTimeout="auto"` was cutting callers off mid-sentence during a natural pause — switched to an explicit value, tuned live from 3s down to 2s based on user feedback
+- Verified the plan's Phase 9 test scenarios: successful transfer (known contact and AI-classified unknown caller, both live), no-answer/busy/failed/canceled (all route to the same graceful fallback, tested via simulated DialCallStatus)
 
 ## Bugs
 

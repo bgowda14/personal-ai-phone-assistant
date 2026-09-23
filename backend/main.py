@@ -3,7 +3,7 @@ import os
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Response
+from fastapi import FastAPI, Form, HTTPException, Response
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -44,14 +44,23 @@ def decide_action(caller_type: str, priority: str, mode: str) -> str:
     """
     if caller_type == "spam":
         return "REJECT"
-    if caller_type in ("delivery", "apartment"):
-        return "TAKE_MESSAGE"
 
     mode_key = (mode or "").strip().lower()
     if mode_key not in ("available", "busy", "sleeping"):
         # In Class / Driving / Custom / anything else the plan doesn't give
         # an explicit matrix for: treat like Busy as the safe default.
         mode_key = "busy"
+
+    # User-requested override: when Available, an urgent call transfers
+    # regardless of who it's from — spam is the only exception, handled
+    # above. This goes beyond the plan's own matrix (which only transfers
+    # family/recruiter/friend when Available), added after live testing
+    # showed an urgent unknown caller should still get through.
+    if mode_key == "available" and priority == "high":
+        return "TRANSFER"
+
+    if caller_type in ("delivery", "apartment"):
+        return "TAKE_MESSAGE"
 
     if mode_key == "available":
         if caller_type in ("family", "recruiter", "friend"):
@@ -158,7 +167,14 @@ CLASSIFICATION_INSTRUCTIONS = (
 )
 
 
-def classify_call(call_sid: str) -> None:
+def classify_call(call_sid: str) -> str | None:
+    """Classifies the call and writes ai_*/decided_action to the DB.
+
+    Called synchronously from /voice/urgency (the caller is still on the
+    line waiting) so the decision — including whether to transfer — is
+    known before the call ends, not after. Returns the decided_action, or
+    None if classification couldn't run (no API key, or a failure).
+    """
     if openai_client is None:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -167,7 +183,7 @@ def classify_call(call_sid: str) -> None:
                     ("OPENAI_API_KEY not configured", call_sid),
                 )
             conn.commit()
-        return
+        return None
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -178,7 +194,7 @@ def classify_call(call_sid: str) -> None:
             row = cur.fetchone()
 
     if row is None:
-        return
+        return None
 
     raw_intro, _raw_reason, raw_urgency, phone_number = row
     transcript = (
@@ -200,7 +216,7 @@ def classify_call(call_sid: str) -> None:
                     "strict": True,
                 }
             },
-            timeout=15,
+            timeout=10,
         )
         result = json.loads(response.output_text)
 
@@ -237,6 +253,7 @@ def classify_call(call_sid: str) -> None:
                     ),
                 )
             conn.commit()
+        return decided_action
     except Exception as exc:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -245,6 +262,7 @@ def classify_call(call_sid: str) -> None:
                     (str(exc)[:500], call_sid),
                 )
             conn.commit()
+        return None
 
 
 class StatusUpdate(BaseModel):
@@ -263,9 +281,30 @@ def gather_response(question: str, action: str) -> Response:
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         f'<Gather input="speech" action="{action}" method="POST" '
-        'speechTimeout="auto" timeout="5" actionOnEmptyResult="true">'
+        'speechTimeout="2" timeout="5" actionOnEmptyResult="true">'
         f"<Say>{question}</Say>"
         "</Gather>"
+        "</Response>"
+    )
+    return Response(content=twiml, media_type="application/xml")
+
+
+def transfer_twiml(caller_name: str | None) -> Response:
+    """TwiML that dials TRANSFER_PHONE_NUMBER live, with a completion
+    callback so a no-answer/busy/declined transfer doesn't just drop the
+    caller — see /voice/transfer-complete."""
+    greeting = (
+        f"Thanks {caller_name}, let me try to connect you to Bharath now."
+        if caller_name
+        else "Let me try to connect you to Bharath now."
+    )
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        f"<Say>{greeting}</Say>"
+        '<Dial action="/voice/transfer-complete" method="POST" timeout="20">'
+        f"{TRANSFER_PHONE_NUMBER}"
+        "</Dial>"
         "</Response>"
     )
     return Response(content=twiml, media_type="application/xml")
@@ -317,9 +356,8 @@ def voice(CallSid: str = Form(...), From: str = Form(...)):
                     cur.execute(
                         """
                         INSERT INTO calls (call_sid, phone_number, status,
-                            ai_name, ai_type, decided_action,
-                            matched_contact_id, ended_at)
-                        VALUES (%s, %s, 'completed', %s, %s, 'TRANSFER', %s, now())
+                            ai_name, ai_type, decided_action, matched_contact_id)
+                        VALUES (%s, %s, 'in_progress', %s, %s, 'TRANSFER', %s)
                         ON CONFLICT (call_sid) DO NOTHING;
                         """,
                         (CallSid, From, contact[1], contact[2], contact[0]),
@@ -327,20 +365,24 @@ def voice(CallSid: str = Form(...), From: str = Form(...)):
                 conn.commit()
 
             if TRANSFER_PHONE_NUMBER:
-                twiml = (
-                    '<?xml version="1.0" encoding="UTF-8"?>'
-                    "<Response>"
-                    f"<Say>Hi {contact[1]}, let me get Bharath for you now.</Say>"
-                    f"<Dial>{TRANSFER_PHONE_NUMBER}</Dial>"
-                    "</Response>"
-                )
-            else:
-                twiml = (
-                    '<?xml version="1.0" encoding="UTF-8"?>'
-                    "<Response>"
-                    f"<Say>Hi {contact[1]}, I'll let Bharath know right away.</Say>"
-                    "</Response>"
-                )
+                return transfer_twiml(contact[1])
+
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE calls SET status = 'completed', ended_at = now()
+                        WHERE call_sid = %s;
+                        """,
+                        (CallSid,),
+                    )
+                conn.commit()
+            twiml = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                "<Response>"
+                f"<Say>Hi {contact[1]}, I'll let Bharath know right away.</Say>"
+                "</Response>"
+            )
             return Response(content=twiml, media_type="application/xml")
 
     with get_connection() as conn:
@@ -360,7 +402,7 @@ def voice(CallSid: str = Form(...), From: str = Form(...)):
         "<Response>"
         "<Say>Hi, you've reached Bharath's assistant.</Say>"
         '<Gather input="speech" action="/voice/intro" method="POST" '
-        'speechTimeout="auto" timeout="5" actionOnEmptyResult="true">'
+        'speechTimeout="2" timeout="5" actionOnEmptyResult="true">'
         "<Say>May I ask who's calling and what this is regarding?</Say>"
         "</Gather>"
         "</Response>"
@@ -412,7 +454,6 @@ def voice_intro(
 
 @app.post("/voice/urgency")
 def voice_urgency(
-    background_tasks: BackgroundTasks,
     CallSid: str = Form(...),
     SpeechResult: str = Form(""),
     retry: int = 0,
@@ -426,21 +467,75 @@ def voice_urgency(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                UPDATE calls
-                SET urgency = %s, status = 'completed', ended_at = now()
-                WHERE call_sid = %s;
-                """,
+                "UPDATE calls SET urgency = %s WHERE call_sid = %s;",
                 (SpeechResult or None, CallSid),
             )
         conn.commit()
 
-    background_tasks.add_task(classify_call, CallSid)
+    # Classify synchronously (the caller is still on the line) so we know
+    # whether to transfer before deciding how to end the call.
+    decided_action = classify_call(CallSid)
+
+    if decided_action == "TRANSFER" and TRANSFER_PHONE_NUMBER:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT ai_name FROM calls WHERE call_sid = %s;", (CallSid,)
+                )
+                name_row = cur.fetchone()
+        return transfer_twiml(name_row[0] if name_row else None)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE calls SET status = 'completed', ended_at = now()
+                WHERE call_sid = %s;
+                """,
+                (CallSid,),
+            )
+        conn.commit()
 
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         "<Say>Thanks, I'll pass that along. Goodbye.</Say>"
+        "<Hangup/>"
+        "</Response>"
+    )
+    return Response(content=twiml, media_type="application/xml")
+
+
+@app.post("/voice/transfer-complete")
+def voice_transfer_complete(
+    CallSid: str = Form(...), DialCallStatus: str = Form("")
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE calls
+                SET transfer_result = %s, status = 'completed', ended_at = now()
+                WHERE call_sid = %s;
+                """,
+                (DialCallStatus or None, CallSid),
+            )
+        conn.commit()
+
+    if DialCallStatus == "completed":
+        # Answered, and the bridged call has now ended on its own — nothing
+        # more to say.
+        twiml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+        return Response(content=twiml, media_type="application/xml")
+
+    # busy / no-answer / failed / canceled — the caller already gave their
+    # name and reason during the Q&A, so relay that rather than asking
+    # them to repeat it into a voicemail.
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        "<Say>He isn't available right now, but I've already let him know "
+        "you called. He'll follow up soon. Goodbye.</Say>"
         "<Hangup/>"
         "</Response>"
     )
@@ -490,7 +585,8 @@ def get_calls(limit: int = 20):
                        calls.ai_intent, calls.ai_priority, calls.ai_message,
                        calls.ai_error, calls.ai_recommended_action,
                        calls.dismissed_at, calls.decided_action,
-                       calls.matched_contact_id, contacts.name
+                       calls.matched_contact_id, contacts.name,
+                       calls.transfer_result
                 FROM calls
                 LEFT JOIN contacts ON contacts.id = calls.matched_contact_id
                 ORDER BY calls.started_at DESC
@@ -521,6 +617,7 @@ def get_calls(limit: int = 20):
             "decided_action": row[17],
             "matched_contact_id": row[18],
             "matched_contact_name": row[19],
+            "transfer_result": row[20],
         }
         for row in rows
     ]

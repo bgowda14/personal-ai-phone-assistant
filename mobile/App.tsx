@@ -69,6 +69,7 @@ type Call = {
   decided_action: string | null;
   matched_contact_id: number | null;
   matched_contact_name: string | null;
+  transfer_result: string | null;
 };
 
 type Contact = {
@@ -99,6 +100,31 @@ function formatDateTime(isoString: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+const FAILED_TRANSFER_RESULTS = ['no-answer', 'busy', 'failed', 'canceled'];
+
+function decisionLabel(call: Call): string {
+  if (call.decided_action !== 'TRANSFER') {
+    return (
+      DECISION_LABELS[call.decided_action || ''] || call.decided_action || ''
+    );
+  }
+  if (call.transfer_result === 'completed') return 'Transferred';
+  if (call.transfer_result) return 'Transfer Failed';
+  if (call.status === 'in_progress') return 'Transferring...';
+  return 'Would Transfer'; // no transfer number configured
+}
+
+function decisionBadgeVariant(call: Call): 'transfer' | 'reject' | 'failed' | 'neutral' {
+  if (call.decided_action === 'REJECT') return 'reject';
+  if (call.decided_action === 'TRANSFER') {
+    if (call.transfer_result && FAILED_TRANSFER_RESULTS.includes(call.transfer_result)) {
+      return 'failed';
+    }
+    return 'transfer';
+  }
+  return 'neutral';
 }
 
 function CallCard({
@@ -142,13 +168,15 @@ function CallCard({
             <Text
               style={[
                 styles.decisionBadge,
-                call.decided_action === 'TRANSFER' &&
+                decisionBadgeVariant(call) === 'transfer' &&
                   styles.decisionBadgeTransfer,
-                call.decided_action === 'REJECT' &&
+                decisionBadgeVariant(call) === 'failed' &&
+                  styles.decisionBadgeFailed,
+                decisionBadgeVariant(call) === 'reject' &&
                   styles.decisionBadgeReject,
               ]}
             >
-              {DECISION_LABELS[call.decided_action] || call.decided_action}
+              {decisionLabel(call)}
             </Text>
           )}
           {call.ai_type && (
@@ -816,6 +844,10 @@ const styles = StyleSheet.create({
   decisionBadgeReject: {
     color: '#fff',
     backgroundColor: '#c0392b',
+  },
+  decisionBadgeFailed: {
+    color: '#fff',
+    backgroundColor: '#946c00',
   },
   callTypeBadge: {
     fontSize: 11,
