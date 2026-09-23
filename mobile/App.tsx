@@ -390,7 +390,10 @@ export default function App() {
   const deleteOldCalls = () => {
     fetch(`${API_BASE_URL}/calls/old?days=30`, { method: 'DELETE' })
       .then((res) => res.json())
-      .then(() => loadAllCalls())
+      .then(() => {
+        loadAllCalls();
+        loadCalls();
+      })
       .catch(() => setAllCallsError('Could not delete old calls'));
   };
 
@@ -401,6 +404,27 @@ export default function App() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: deleteOldCalls },
+      ]
+    );
+  };
+
+  const deleteDismissedCalls = () => {
+    fetch(`${API_BASE_URL}/calls/dismissed`, { method: 'DELETE' })
+      .then((res) => res.json())
+      .then(() => {
+        loadAllCalls();
+        loadCalls();
+      })
+      .catch(() => setAllCallsError('Could not delete dismissed calls'));
+  };
+
+  const confirmDeleteDismissedCalls = () => {
+    Alert.alert(
+      'Delete dismissed calls',
+      'Delete all calls you\'ve dismissed? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: deleteDismissedCalls },
       ]
     );
   };
@@ -509,14 +533,22 @@ export default function App() {
           <View style={styles.backLinkSpacer} />
         </View>
 
-        <Pressable
-          style={styles.deleteOldButton}
-          onPress={confirmDeleteOldCalls}
-        >
-          <Text style={styles.deleteOldButtonText}>
-            Delete calls older than 30 days
-          </Text>
-        </Pressable>
+        <View style={styles.deleteButtonRow}>
+          <Pressable
+            style={[styles.deleteOldButton, styles.deleteButtonHalf]}
+            onPress={confirmDeleteOldCalls}
+          >
+            <Text style={styles.deleteOldButtonText}>
+              Delete older than 30 days
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.deleteOldButton, styles.deleteButtonHalf]}
+            onPress={confirmDeleteDismissedCalls}
+          >
+            <Text style={styles.deleteOldButtonText}>Delete dismissed</Text>
+          </Pressable>
+        </View>
 
         {allCallsError && <Text style={styles.error}>{allCallsError}</Text>}
         {allCallsLoading && (
@@ -657,6 +689,10 @@ export default function App() {
     );
   }
 
+  // Dismissed calls are handled — keep them out of the Recent Calls
+  // preview (they still show up in All Calls, which is the full history).
+  const recentCalls = calls.filter((call) => !call.dismissed_at);
+
   return (
     <ScrollView
       style={styles.container}
@@ -793,11 +829,11 @@ export default function App() {
         </Pressable>
       </View>
       {callsError && <Text style={styles.error}>{callsError}</Text>}
-      {!callsError && calls.length === 0 && (
+      {!callsError && recentCalls.length === 0 && (
         <Text style={styles.emptyText}>No calls yet</Text>
       )}
       <View style={styles.callList}>
-        {calls.map((call) => (
+        {recentCalls.map((call) => (
           <CallCard
             key={call.id}
             call={call}
@@ -912,6 +948,16 @@ const styles = StyleSheet.create({
   backLinkSpacer: {
     width: 48,
   },
+  deleteButtonRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  deleteButtonHalf: {
+    flex: 1,
+    marginBottom: 0,
+  },
   deleteOldButton: {
     width: '100%',
     paddingVertical: 10,
@@ -925,6 +971,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#c0392b',
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: 14,

@@ -836,6 +836,16 @@ def delete_old_calls(days: int = 30):
     return {"deleted": deleted}
 
 
+@app.delete("/calls/dismissed")
+def delete_dismissed_calls():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM calls WHERE dismissed_at IS NOT NULL;")
+            deleted = cur.rowcount
+        conn.commit()
+    return {"deleted": deleted}
+
+
 @app.get("/contacts")
 def get_contacts():
     with get_connection() as conn:
