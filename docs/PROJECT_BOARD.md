@@ -5,7 +5,7 @@
 - Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
 - ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
 - Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
-- Real-time updates without reopening the app (Phase 11: push notifications) — for now the app refreshes on load, pull-to-refresh, and when it comes back to the foreground
+- Phase 11 (push notifications): explicitly declined by user, not deferred — Expo Go dropped remote push support in SDK 53+, so real push needs a development build + a $99/year Apple Developer Program membership just for the push credentials. Not worth it for a personal project right now. Revisit only if the user brings it up again; don't re-suggest unprompted. The app still refreshes fine on load, pull-to-refresh, and when it comes back to the foreground.
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
 - A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
 - Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision until either Docker/AWS (Phase 16/17) removes the "backend only works while the Mac is on" dependency, or a Twilio Fallback URL safety net is built so a dead backend doesn't produce a broken-sounding error for real callers
