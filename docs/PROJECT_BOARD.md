@@ -9,12 +9,12 @@
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
 - A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
 - Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision until either Docker/AWS (Phase 16/17) removes the "backend only works while the Mac is on" dependency, or a Twilio Fallback URL safety net is built so a dead backend doesn't produce a broken-sounding error for real callers
-- Natural-language custom status UI (Phase 10) built and backend-verified, but not yet checked visually on-device
+- In-app voice recording for "Tell My Assistant" (record + transcribe via OpenAI) — not needed for now, the iPhone keyboard's built-in dictation mic already covers this need for free
 - Phase 15's test scenario "backend down / OpenAI down / database down" hasn't been explicitly tested — related to the 9.5 hold above
 
 ## In Progress
 
-(nothing — Phase 10 complete, next phase not yet chosen)
+(nothing — Phase 10 complete and verified on-device, next phase not yet chosen)
 
 ## Done
 
@@ -63,6 +63,9 @@
 - Tested against both of the plan's own worked examples ("studying until 8 PM, let recruiters and family through" and "traveling until Sunday, only interrupt if urgent") — both interpreted correctly, including resolving "Sunday" to the correct real calendar date
 - A custom rule fully overrides the normal Available/Busy/Sleeping matrix while active and unexpired; manually tapping any status button always clears it, so an explicit choice never gets silently overridden by a stale natural-language rule
 - Verified live via curl: a non-urgent recruiter call was correctly held to "take a message" under an active "urgent only" rule that would normally have transferred it, while an urgent stranger still got transferred
+- Verified Phase 10 on-device: typed and confirmed a custom status via "Tell My Assistant," confirmed the iPhone keyboard's built-in dictation mic works for hands-free input into the same text box (no in-app recording feature needed)
+- Added `DELETE /calls/dismissed` + a matching button on the All Calls page for clearing out handled call clutter
+- Fixed the Home screen's Recent Calls preview showing dismissed calls (now filtered out — full history including dismissed calls still lives in All Calls) and fixed Home's call list going stale after deleting old/dismissed calls from the All Calls page
 
 ## Bugs
 
