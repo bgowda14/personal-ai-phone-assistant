@@ -81,6 +81,15 @@ type Contact = {
   created_at: string;
 };
 
+type StatusInterpretation = {
+  instruction: string;
+  mode_label: string;
+  expires_at: string | null;
+  transfer_types: string[];
+  urgent_always_transfers: boolean;
+  summary: string;
+};
+
 function timeAgo(isoString: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(isoString).getTime()) / 1000);
   if (seconds < 60) return 'just now';
@@ -225,7 +234,19 @@ const ALL_CALLS_LIMIT = 200;
 
 export default function App() {
   const [view, setView] = useState<'home' | 'allCalls' | 'contacts'>('home');
-  const [status, setStatus] = useState<Status>('Available');
+  // Plain string, not Status — a natural-language rule (Phase 10) can set
+  // a mode label outside the 6 fixed buttons, e.g. "Studying", "Traveling".
+  const [status, setStatus] = useState<string>('Available');
+  const [customInstruction, setCustomInstruction] = useState<string | null>(
+    null
+  );
+  const [customExpiresAt, setCustomExpiresAt] = useState<string | null>(null);
+  const [naturalInput, setNaturalInput] = useState('');
+  const [interpreting, setInterpreting] = useState(false);
+  const [interpretError, setInterpretError] = useState<string | null>(null);
+  const [pendingInterpretation, setPendingInterpretation] =
+    useState<StatusInterpretation | null>(null);
+  const [applyingCustom, setApplyingCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
   const [callsError, setCallsError] = useState<string | null>(null);
@@ -384,12 +405,19 @@ export default function App() {
     );
   };
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/status`)
+  const loadStatus = () => {
+    return fetch(`${API_BASE_URL}/status`)
       .then((res) => res.json())
-      .then((data) => setStatus(data.mode))
+      .then((data) => {
+        setStatus(data.mode);
+        setCustomInstruction(data.custom_instruction);
+        setCustomExpiresAt(data.expires_at);
+      })
       .catch(() => setError('Could not reach backend'));
+  };
 
+  useEffect(() => {
+    loadStatus();
     loadCalls();
   }, []);
 
@@ -409,12 +437,58 @@ export default function App() {
 
   const updateStatus = (option: Status) => {
     setStatus(option);
+    setCustomInstruction(null);
+    setCustomExpiresAt(null);
     setError(null);
     fetch(`${API_BASE_URL}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: option }),
     }).catch(() => setError('Could not reach backend'));
+  };
+
+  const interpretInstruction = () => {
+    if (!naturalInput.trim()) return;
+    setInterpreting(true);
+    setInterpretError(null);
+    fetch(`${API_BASE_URL}/status/interpret`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction: naturalInput.trim() }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
+      .then((data) => setPendingInterpretation(data))
+      .catch(() =>
+        setInterpretError("Couldn't understand that — try rephrasing")
+      )
+      .finally(() => setInterpreting(false));
+  };
+
+  const confirmCustomStatus = () => {
+    if (!pendingInterpretation) return;
+    setApplyingCustom(true);
+    fetch(`${API_BASE_URL}/status/apply-custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pendingInterpretation),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setStatus(data.mode);
+        setCustomInstruction(data.custom_instruction);
+        setCustomExpiresAt(data.expires_at);
+        setPendingInterpretation(null);
+        setNaturalInput('');
+      })
+      .catch(() => setInterpretError('Could not apply — try again'))
+      .finally(() => setApplyingCustom(false));
+  };
+
+  const cancelCustomStatus = () => {
+    setPendingInterpretation(null);
   };
 
   if (view === 'allCalls') {
@@ -620,6 +694,90 @@ export default function App() {
         ))}
       </View>
 
+      {customInstruction && (
+        <View style={styles.activeRuleBanner}>
+          <Text style={styles.activeRuleText}>&ldquo;{customInstruction}&rdquo;</Text>
+          {customExpiresAt && (
+            <Text style={styles.activeRuleExpiry}>
+              Until {formatDateTime(customExpiresAt)}
+            </Text>
+          )}
+        </View>
+      )}
+
+      <Text style={[styles.sectionTitle, styles.sectionTitleStandalone]}>
+        Tell My Assistant
+      </Text>
+      {!pendingInterpretation ? (
+        <View style={styles.naturalInputBox}>
+          <TextInput
+            style={[styles.textInput, styles.naturalInputField]}
+            placeholder="e.g. Studying until 8, let family and recruiters through"
+            value={naturalInput}
+            onChangeText={setNaturalInput}
+            multiline
+          />
+          {interpretError && <Text style={styles.error}>{interpretError}</Text>}
+          <Pressable
+            style={styles.addContactButton}
+            onPress={interpretInstruction}
+            disabled={interpreting || !naturalInput.trim()}
+          >
+            <Text style={styles.callActionText}>
+              {interpreting ? 'Thinking...' : 'Tell Assistant'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.naturalInputBox}>
+          <Text style={styles.formLabel}>I understood:</Text>
+          <Text style={styles.confirmSummary}>
+            {pendingInterpretation.summary}
+          </Text>
+          <View style={styles.chipRow}>
+            <Text style={styles.callTypeBadge}>
+              {pendingInterpretation.mode_label}
+            </Text>
+            {pendingInterpretation.expires_at && (
+              <Text style={styles.callTypeBadge}>
+                Until {formatDateTime(pendingInterpretation.expires_at)}
+              </Text>
+            )}
+          </View>
+          {pendingInterpretation.transfer_types.length > 0 && (
+            <Text style={styles.callReason}>
+              Let through: {pendingInterpretation.transfer_types.join(', ')}
+            </Text>
+          )}
+          {pendingInterpretation.urgent_always_transfers && (
+            <Text style={styles.callReason}>
+              Urgent callers always let through
+            </Text>
+          )}
+          <View style={styles.callActionRow}>
+            <Pressable
+              style={styles.callActionButton}
+              onPress={confirmCustomStatus}
+              disabled={applyingCustom}
+            >
+              <Text style={styles.callActionText}>
+                {applyingCustom ? 'Applying...' : 'Confirm'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.callActionButton, styles.callActionGhost]}
+              onPress={cancelCustomStatus}
+            >
+              <Text
+                style={[styles.callActionText, styles.callActionGhostText]}
+              >
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       <Pressable
         style={styles.manageContactsLink}
         onPress={openContacts}
@@ -718,6 +876,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  sectionTitleStandalone: {
+    width: '100%',
+    marginTop: 32,
+    marginBottom: 12,
   },
   viewAllLink: {
     fontSize: 14,
@@ -907,6 +1070,43 @@ const styles = StyleSheet.create({
   },
   callActionGhostText: {
     color: '#444',
+  },
+  activeRuleBanner: {
+    width: '100%',
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#1a5276',
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#eaf1f8',
+  },
+  activeRuleText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: '#1a5276',
+  },
+  activeRuleExpiry: {
+    fontSize: 12,
+    color: '#1a5276',
+    marginTop: 4,
+  },
+  naturalInputBox: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: '#fff',
+    marginBottom: 24,
+  },
+  naturalInputField: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  confirmSummary: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 10,
   },
   addContactForm: {
     width: '100%',

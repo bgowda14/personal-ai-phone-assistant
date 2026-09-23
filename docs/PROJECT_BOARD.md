@@ -8,11 +8,13 @@
 - Real-time updates without reopening the app (Phase 11: push notifications) — for now the app refreshes on load, pull-to-refresh, and when it comes back to the foreground
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
 - A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
-- Phase 9.5: forward the real main US Mobile number to Twilio — only after Phase 9 has had more real-world use to build confidence
+- Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision until either Docker/AWS (Phase 16/17) removes the "backend only works while the Mac is on" dependency, or a Twilio Fallback URL safety net is built so a dead backend doesn't produce a broken-sounding error for real callers
+- Natural-language custom status UI (Phase 10) built and backend-verified, but not yet checked visually on-device
+- Phase 15's test scenario "backend down / OpenAI down / database down" hasn't been explicitly tested — related to the 9.5 hold above
 
 ## In Progress
 
-(nothing — Phase 9 complete, Phase 9.5 not started)
+(nothing — Phase 10 complete, next phase not yet chosen)
 
 ## Done
 
@@ -57,6 +59,10 @@
 - Fixed a real bug caught live: an urgent unknown caller (Available mode) wasn't transferring because `unknown` caller type didn't match the plan's Available-mode transfer list — added an explicit rule: Available + urgent always transfers, regardless of caller type (except spam)
 - Fixed a real bug caught live: `speechTimeout="auto"` was cutting callers off mid-sentence during a natural pause — switched to an explicit value, tuned live from 3s down to 2s based on user feedback
 - Verified the plan's Phase 9 test scenarios: successful transfer (known contact and AI-classified unknown caller, both live), no-answer/busy/failed/canceled (all route to the same graceful fallback, tested via simulated DialCallStatus)
+- Added natural-language status ("Tell My Assistant: I'm studying until 8, let recruiters and family through") — OpenAI structured output parses it into a mode label, expiry, allowed caller types, and an urgent-override flag; shown to the user for confirmation before it takes effect, per the plan's explicit "show what I understood before applying" requirement
+- Tested against both of the plan's own worked examples ("studying until 8 PM, let recruiters and family through" and "traveling until Sunday, only interrupt if urgent") — both interpreted correctly, including resolving "Sunday" to the correct real calendar date
+- A custom rule fully overrides the normal Available/Busy/Sleeping matrix while active and unexpired; manually tapping any status button always clears it, so an explicit choice never gets silently overridden by a stale natural-language rule
+- Verified live via curl: a non-urgent recruiter call was correctly held to "take a message" under an active "urgent only" rule that would normally have transferred it, while an urgent stranger still got transferred
 
 ## Bugs
 
