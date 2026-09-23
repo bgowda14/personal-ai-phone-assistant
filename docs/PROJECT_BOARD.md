@@ -14,7 +14,7 @@
 
 ## In Progress
 
-(nothing — Phase 10 complete and verified on-device, next phase not yet chosen)
+(nothing — Phase 12 complete and verified on-device, next phase not yet chosen)
 
 ## Done
 
@@ -66,6 +66,10 @@
 - Verified Phase 10 on-device: typed and confirmed a custom status via "Tell My Assistant," confirmed the iPhone keyboard's built-in dictation mic works for hands-free input into the same text box (no in-app recording feature needed)
 - Added `DELETE /calls/dismissed` + a matching button on the All Calls page for clearing out handled call clutter
 - Fixed the Home screen's Recent Calls preview showing dismissed calls (now filtered out — full history including dismissed calls still lives in All Calls) and fixed Home's call list going stale after deleting old/dismissed calls from the All Calls page
+- Rebuilt the mobile app on `expo-router` with real screens (Home, Calls, Contacts, Settings tabs + a Call Details screen and a Rules screen) instead of one ~1200-line file with manual view-state toggling
+- Added a Call Details screen reached by tapping any call, backed by a new `GET /calls/{id}` endpoint — full transcript, AI summary, decision + transfer outcome, contact match
+- Moved the decision matrix from hardcoded Python logic into a new `rules` table, fully editable from a Rules screen in the app (`GET`/`PUT /rules`) — the user wanted real freedom to change it since "it wont be the same all times"; safety/emergency overrides (spam-reject, urgent-transfers-when-Available, Sleeping family emergency) stay fixed and are labeled as such
+- Added tab bar icons, a new Settings screen (Twilio number, backend URL, whether OpenAI/transfer are configured via `GET /config`), removed a redundant "Manage Contacts" link from Home now that Contacts is its own tab, and fixed the Home title being hidden behind the iPhone 16 Pro's Dynamic Island using the real safe-area inset
 
 ## Bugs
 
