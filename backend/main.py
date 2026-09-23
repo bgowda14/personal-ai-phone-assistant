@@ -37,13 +37,25 @@ def get_connection():
     return psycopg.connect(DATABASE_URL)
 
 
-def decide_action(caller_type: str, priority: str, mode: str) -> str:
-    """Rule engine from the build plan's Phase 8 decision matrix.
+def get_rule(mode_key: str, caller_type: str) -> str | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT action FROM rules WHERE mode = %s AND caller_type = %s;",
+                (mode_key, caller_type),
+            )
+            row = cur.fetchone()
+    return row[0] if row else None
 
-    Contacts give the ground-truth caller_type (relationship); priority is
-    always the AI's per-call read on urgency, not the contact's own
-    priority field — a family emergency should transfer even for a
-    generally low-priority contact.
+
+def decide_action(caller_type: str, priority: str, mode: str) -> str:
+    """Rule engine. Most cells come from the user-editable `rules` table
+    (Settings > View Rules in the app — the user asked for real editability
+    here, since "it won't be the same all the time"). A few things stay
+    fixed, not editable, since they're safety/emergency behavior rather
+    than preference: spam is always rejected, an urgent call always
+    transfers when Available, and a family emergency (urgent) always
+    transfers even while Sleeping.
     """
     if caller_type == "spam":
         return "REJECT"
@@ -54,31 +66,19 @@ def decide_action(caller_type: str, priority: str, mode: str) -> str:
         # an explicit matrix for: treat like Busy as the safe default.
         mode_key = "busy"
 
-    # User-requested override: when Available, an urgent call transfers
-    # regardless of who it's from — spam is the only exception, handled
-    # above. This goes beyond the plan's own matrix (which only transfers
-    # family/recruiter/friend when Available), added after live testing
-    # showed an urgent unknown caller should still get through.
     if mode_key == "available" and priority == "high":
         return "TRANSFER"
 
-    if caller_type in ("delivery", "apartment"):
-        return "TAKE_MESSAGE"
-
-    if mode_key == "available":
-        if caller_type in ("family", "recruiter", "friend"):
-            return "TRANSFER"
-        return "SCREEN"  # unknown
-
-    if mode_key == "busy":
-        if caller_type in ("family", "recruiter"):
-            return "TRANSFER"
-        return "TAKE_MESSAGE"  # friend, unknown
-
-    # sleeping
-    if caller_type == "family" and priority == "high":
+    if mode_key == "sleeping" and caller_type == "family" and priority == "high":
         return "TRANSFER"
-    return "TAKE_MESSAGE"
+
+    action = get_rule(mode_key, caller_type)
+    if action:
+        return action
+
+    # No saved rule for this exact caller_type (e.g. a type added later) —
+    # fall back to however "unknown" is handled for this mode.
+    return get_rule(mode_key, "unknown") or "TAKE_MESSAGE"
 
 
 def find_contact_by_phone(phone_number: str):
@@ -314,6 +314,16 @@ class ContactCreate(BaseModel):
     priority: str = "normal"
 
 
+VALID_ACTIONS = ["TRANSFER", "TAKE_MESSAGE", "SCREEN", "REJECT", "ASK_ME"]
+EDITABLE_MODES = ["available", "busy", "sleeping"]
+
+
+class RuleUpdate(BaseModel):
+    mode: str
+    caller_type: str
+    action: str
+
+
 def gather_response(question: str, action: str) -> Response:
     twiml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -351,6 +361,15 @@ def transfer_twiml(caller_name: str | None) -> Response:
 @app.get("/health")
 def health():
     return {"status": "online"}
+
+
+@app.get("/config")
+def get_config():
+    """Informational only — booleans, never the underlying secrets."""
+    return {
+        "openai_configured": openai_client is not None,
+        "transfer_configured": TRANSFER_PHONE_NUMBER is not None,
+    }
 
 
 MAX_SILENCE_RETRIES = 2
@@ -747,22 +766,53 @@ def apply_custom_status(body: ApplyCustomStatus):
     }
 
 
+CALL_SELECT_COLUMNS = """
+    calls.id, calls.phone_number, calls.caller_name,
+    calls.reason, calls.urgency, calls.started_at,
+    calls.ended_at, calls.status,
+    calls.ai_name, calls.ai_company, calls.ai_type,
+    calls.ai_intent, calls.ai_priority, calls.ai_message,
+    calls.ai_error, calls.ai_recommended_action,
+    calls.dismissed_at, calls.decided_action,
+    calls.matched_contact_id, contacts.name,
+    calls.transfer_result
+"""
+
+
+def _call_row_to_dict(row) -> dict:
+    return {
+        "id": row[0],
+        "phone_number": row[1],
+        "caller_name": row[2],
+        "reason": row[3],
+        "urgency": row[4],
+        "started_at": row[5].isoformat(),
+        "ended_at": row[6].isoformat() if row[6] else None,
+        "status": row[7],
+        "ai_name": row[8],
+        "ai_company": row[9],
+        "ai_type": row[10],
+        "ai_intent": row[11],
+        "ai_priority": row[12],
+        "ai_message": row[13],
+        "ai_error": row[14],
+        "ai_recommended_action": row[15],
+        "dismissed_at": row[16].isoformat() if row[16] else None,
+        "decided_action": row[17],
+        "matched_contact_id": row[18],
+        "matched_contact_name": row[19],
+        "transfer_result": row[20],
+    }
+
+
 @app.get("/calls")
 def get_calls(limit: int = 20):
     limit = max(1, min(limit, 500))
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT calls.id, calls.phone_number, calls.caller_name,
-                       calls.reason, calls.urgency, calls.started_at,
-                       calls.ended_at, calls.status,
-                       calls.ai_name, calls.ai_company, calls.ai_type,
-                       calls.ai_intent, calls.ai_priority, calls.ai_message,
-                       calls.ai_error, calls.ai_recommended_action,
-                       calls.dismissed_at, calls.decided_action,
-                       calls.matched_contact_id, contacts.name,
-                       calls.transfer_result
+                f"""
+                SELECT {CALL_SELECT_COLUMNS}
                 FROM calls
                 LEFT JOIN contacts ON contacts.id = calls.matched_contact_id
                 ORDER BY calls.started_at DESC
@@ -771,32 +821,26 @@ def get_calls(limit: int = 20):
                 (limit,),
             )
             rows = cur.fetchall()
-    return [
-        {
-            "id": row[0],
-            "phone_number": row[1],
-            "caller_name": row[2],
-            "reason": row[3],
-            "urgency": row[4],
-            "started_at": row[5].isoformat(),
-            "ended_at": row[6].isoformat() if row[6] else None,
-            "status": row[7],
-            "ai_name": row[8],
-            "ai_company": row[9],
-            "ai_type": row[10],
-            "ai_intent": row[11],
-            "ai_priority": row[12],
-            "ai_message": row[13],
-            "ai_error": row[14],
-            "ai_recommended_action": row[15],
-            "dismissed_at": row[16].isoformat() if row[16] else None,
-            "decided_action": row[17],
-            "matched_contact_id": row[18],
-            "matched_contact_name": row[19],
-            "transfer_result": row[20],
-        }
-        for row in rows
-    ]
+    return [_call_row_to_dict(row) for row in rows]
+
+
+@app.get("/calls/{call_id}")
+def get_call(call_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {CALL_SELECT_COLUMNS}
+                FROM calls
+                LEFT JOIN contacts ON contacts.id = calls.matched_contact_id
+                WHERE calls.id = %s;
+                """,
+                (call_id,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return Response(status_code=404)
+    return _call_row_to_dict(row)
 
 
 @app.post("/calls/{call_id}/dismiss")
@@ -844,6 +888,51 @@ def delete_dismissed_calls():
             deleted = cur.rowcount
         conn.commit()
     return {"deleted": deleted}
+
+
+@app.get("/rules")
+def get_rules():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT mode, caller_type, action FROM rules ORDER BY mode, caller_type;"
+            )
+            rows = cur.fetchall()
+    return [
+        {"mode": row[0], "caller_type": row[1], "action": row[2]} for row in rows
+    ]
+
+
+@app.put("/rules")
+def update_rule(rule: RuleUpdate):
+    mode = rule.mode.strip().lower()
+    if mode not in EDITABLE_MODES:
+        raise HTTPException(
+            status_code=400, detail=f"mode must be one of {EDITABLE_MODES}"
+        )
+    if rule.caller_type not in CALLER_TYPES:
+        raise HTTPException(
+            status_code=400, detail=f"caller_type must be one of {CALLER_TYPES}"
+        )
+    if rule.action not in VALID_ACTIONS:
+        raise HTTPException(
+            status_code=400, detail=f"action must be one of {VALID_ACTIONS}"
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO rules (mode, caller_type, action)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (mode, caller_type) DO UPDATE SET action = EXCLUDED.action
+                RETURNING mode, caller_type, action;
+                """,
+                (mode, rule.caller_type, rule.action),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return {"mode": row[0], "caller_type": row[1], "action": row[2]}
 
 
 @app.get("/contacts")
