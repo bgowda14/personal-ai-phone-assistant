@@ -8,13 +8,14 @@
 - Phase 11 (push notifications): explicitly declined by user, not deferred — Expo Go dropped remote push support in SDK 53+, so real push needs a development build + a $99/year Apple Developer Program membership just for the push credentials. Not worth it for a personal project right now. Revisit only if the user brings it up again; don't re-suggest unprompted. The app still refreshes fine on load, pull-to-refresh, and when it comes back to the foreground.
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
 - A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
-- Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision until either Docker/AWS (Phase 16/17) removes the "backend only works while the Mac is on" dependency, or a Twilio Fallback URL safety net is built so a dead backend doesn't produce a broken-sounding error for real callers
+- Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision. The Twilio Fallback URL safety net (Phase 15) is now built, closing one of the two reliability gaps that motivated the hold; full 24/7 uptime (Docker/AWS, Phase 16/17) is still the other. Still needs an explicit fresh go-ahead before touching the main number.
 - In-app voice recording for "Tell My Assistant" (record + transcribe via OpenAI) — not needed for now, the iPhone keyboard's built-in dictation mic already covers this need for free
-- Phase 15's test scenario "backend down / OpenAI down / database down" hasn't been explicitly tested — related to the 9.5 hold above
+- Phase 15 Scenarios 11/12 (main number forwarding + loop prevention) — correctly out of scope until Phase 9.5 is picked back up, nothing to test yet
+- An interactive "AI asks a clarifying question" flow (Phase 15's Scenario 6 as literally worded) — not built; current behavior degrades safely to sensible defaults on unclear input instead, which was judged sufficient for now
 
 ## In Progress
 
-(nothing — Phase 14 complete and verified live, next phase not yet chosen)
+(nothing — Phase 15 complete and verified live, next phase not yet chosen)
 
 ## Done
 
@@ -76,6 +77,9 @@
 - Audited caller-facing wording, phone-number privacy, and logging — confirmed already clean by design (no status leaks, transfer number never spoken or returned in JSON, no custom logging of sensitive data)
 - Reviewed and documented database access and call-transcript retention decisions — kept the existing manual delete controls rather than building new automated retention infrastructure for a requirement nobody's hit yet
 - Found and fixed a real bug via live testing: deleting a contact with call history crashed on a foreign-key violation (looked like it worked due to optimistic UI, then reappeared on reload) — fixed with `ON DELETE SET NULL` so historical calls survive contact deletion, verified with disposable test data before touching real data
+- Ran all 12 of the plan's Phase 15 test scenarios: 10 directly verified (friend→message, recruiter→high priority, family emergency→instant transfer, spam→instant reject, unknown caller→info collected, garbled input→safe defaults no crash, backend down→fallback, OpenAI down→graceful, DB failure→graceful, transfer no-answer→fallback message), 2 correctly deferred (main number forwarding/loop prevention — not applicable until Phase 9.5)
+- Built a global exception handler for `/voice/*` so any unhandled backend error (database outage, etc.) during a live call degrades to a normal-sounding apology instead of Twilio's generic error tone — verified with a simulated DB outage via `TestClient`
+- Built a Twilio Fallback URL (a TwiML Bin hosted by Twilio, not our backend) so a fully unreachable backend (Mac off, ngrok down) still gets callers a graceful message + a direct ring to the user's real phone instead of a broken-sounding error — verified live by stopping the backend and placing a real call
 
 ## Bugs
 

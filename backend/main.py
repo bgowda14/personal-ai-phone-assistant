@@ -61,6 +61,26 @@ async def require_api_key(request: Request, call_next):
     return await call_next(request)
 
 
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, exc: Exception):
+    """Phase 15 (testing) — a database outage or any other unhandled bug
+    during a live call must not surface as a raw Twilio error tone; the
+    caller should hear a normal-sounding apology instead. Non-call
+    endpoints (the app's own API) keep the standard JSON 500 — this is
+    specifically about what happens mid-phone-call."""
+    if request.url.path.startswith("/voice"):
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            "<Say>Sorry, I'm having trouble right now. Please try calling "
+            "back in a few minutes.</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+        return Response(content=twiml, media_type="application/xml")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
 async def verify_twilio_request(request: Request) -> None:
     """Dependency for the /voice/* webhook endpoints — confirms the request
     actually came from Twilio (signed with our Auth Token), not from anyone
