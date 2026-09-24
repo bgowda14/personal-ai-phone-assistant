@@ -15,7 +15,7 @@
 
 ## In Progress
 
-(nothing — Phase 15 complete and verified live, next phase not yet chosen)
+- Phase 17: AWS deployment — user needs to create an AWS account first (external, manual step). Plan is Lambda (container image support, Always-Free tier, no 6-month credit clock) rather than EC2, given the account is new and AWS's new-account free tier changed to a 6-month/$200-credit structure in July 2025.
 
 ## Done
 
@@ -80,6 +80,7 @@
 - Ran all 12 of the plan's Phase 15 test scenarios: 10 directly verified (friend→message, recruiter→high priority, family emergency→instant transfer, spam→instant reject, unknown caller→info collected, garbled input→safe defaults no crash, backend down→fallback, OpenAI down→graceful, DB failure→graceful, transfer no-answer→fallback message), 2 correctly deferred (main number forwarding/loop prevention — not applicable until Phase 9.5)
 - Built a global exception handler for `/voice/*` so any unhandled backend error (database outage, etc.) during a live call degrades to a normal-sounding apology instead of Twilio's generic error tone — verified with a simulated DB outage via `TestClient`
 - Built a Twilio Fallback URL (a TwiML Bin hosted by Twilio, not our backend) so a fully unreachable backend (Mac off, ngrok down) still gets callers a graceful message + a direct ring to the user's real phone instead of a broken-sounding error — verified live by stopping the backend and placing a real call
+- Containerized the backend (`Dockerfile` + `docker-compose.yml`) and verified full behavior parity — swapped the live Twilio-facing ngrok tunnel over to the Docker container with zero disruption, confirmed DB/OpenAI/both auth layers all work identically inside the container
 
 ## Bugs
 
