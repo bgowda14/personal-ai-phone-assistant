@@ -3,7 +3,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { API_BASE_URL } from '../../../lib/api';
+import { apiFetch } from '../../../lib/api';
 import { decisionBadgeVariant, decisionLabel } from '../../../lib/decisions';
 import { formatDateTime } from '../../../lib/format';
 import type { Call } from '../../../lib/types';
@@ -18,7 +18,7 @@ export default function CallDetailsScreen() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE_URL}/calls/${id}`)
+    apiFetch(`/calls/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error('not found');
         return res.json();
@@ -39,7 +39,7 @@ export default function CallDetailsScreen() {
     if (!call) return;
     const dismissedAt = new Date().toISOString();
     setCall({ ...call, dismissed_at: dismissedAt });
-    fetch(`${API_BASE_URL}/calls/${call.id}/dismiss`, {
+    apiFetch(`/calls/${call.id}/dismiss`, {
       method: 'POST',
     }).catch(() => setError('Could not dismiss call'));
   };

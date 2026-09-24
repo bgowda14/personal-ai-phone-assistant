@@ -51,4 +51,6 @@ export type StatusResponse = {
 export type Config = {
   openai_configured: boolean;
   transfer_configured: boolean;
+  api_key_configured: boolean;
+  twilio_signature_verified: boolean;
 };

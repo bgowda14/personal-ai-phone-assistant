@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { API_BASE_URL } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
 import { PRIORITY_OPTIONS, RELATIONSHIP_OPTIONS } from '../../lib/options';
 import type { Contact } from '../../lib/types';
 import { styles } from '../../styles/shared';
@@ -31,7 +31,7 @@ export default function ContactsScreen() {
   const loadContacts = () => {
     setError(null);
     setLoading(true);
-    return fetch(`${API_BASE_URL}/contacts`)
+    return apiFetch('/contacts')
       .then((res) => res.json())
       .then((data) => setContacts(data))
       .catch(() => setError('Could not load contacts'))
@@ -54,7 +54,7 @@ export default function ContactsScreen() {
     }
     setAddingContact(true);
     setError(null);
-    fetch(`${API_BASE_URL}/contacts`, {
+    apiFetch('/contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -91,7 +91,7 @@ export default function ContactsScreen() {
         style: 'destructive',
         onPress: () => {
           setContacts((prev) => prev.filter((c) => c.id !== contactId));
-          fetch(`${API_BASE_URL}/contacts/${contactId}`, {
+          apiFetch(`/contacts/${contactId}`, {
             method: 'DELETE',
           }).catch(() => setError('Could not delete contact'));
         },

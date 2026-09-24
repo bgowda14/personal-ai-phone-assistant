@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { CallCard } from '../../../components/CallCard';
-import { API_BASE_URL } from '../../../lib/api';
+import { apiFetch } from '../../../lib/api';
 import type { Call } from '../../../lib/types';
 import { styles } from '../../../styles/shared';
 
@@ -26,7 +26,7 @@ export default function CallsScreen() {
   const loadCalls = () => {
     setError(null);
     setLoading(true);
-    return fetch(`${API_BASE_URL}/calls?limit=${CALLS_LIMIT}`)
+    return apiFetch(`/calls?limit=${CALLS_LIMIT}`)
       .then((res) => res.json())
       .then((data) => setCalls(data))
       .catch(() => setError('Could not load call history'))
@@ -55,13 +55,13 @@ export default function CallsScreen() {
         call.id === callId ? { ...call, dismissed_at: dismissedAt } : call
       )
     );
-    fetch(`${API_BASE_URL}/calls/${callId}/dismiss`, { method: 'POST' }).catch(
-      () => setError('Could not dismiss call')
+    apiFetch(`/calls/${callId}/dismiss`, { method: 'POST' }).catch(() =>
+      setError('Could not dismiss call')
     );
   };
 
   const deleteOldCalls = () => {
-    fetch(`${API_BASE_URL}/calls/old?days=30`, { method: 'DELETE' })
+    apiFetch('/calls/old?days=30', { method: 'DELETE' })
       .then((res) => res.json())
       .then(() => loadCalls())
       .catch(() => setError('Could not delete old calls'));
@@ -79,7 +79,7 @@ export default function CallsScreen() {
   };
 
   const deleteDismissedCalls = () => {
-    fetch(`${API_BASE_URL}/calls/dismissed`, { method: 'DELETE' })
+    apiFetch('/calls/dismissed', { method: 'DELETE' })
       .then((res) => res.json())
       .then(() => loadCalls())
       .catch(() => setError('Could not delete dismissed calls'));

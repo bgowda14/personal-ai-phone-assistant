@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { API_BASE_URL } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import type { StatusResponse } from '../lib/types';
 import { styles } from '../styles/shared';
@@ -44,7 +44,7 @@ export default function RulesScreen() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const loadRules = () => {
-    return fetch(`${API_BASE_URL}/rules`)
+    return apiFetch('/rules')
       .then((res) => res.json())
       .then((data) => setRules(data))
       .catch(() => setError('Could not load rules'));
@@ -52,7 +52,7 @@ export default function RulesScreen() {
 
   useEffect(() => {
     loadRules();
-    fetch(`${API_BASE_URL}/status`)
+    apiFetch('/status')
       .then((res) => res.json())
       .then(setStatus)
       .catch(() => {});
@@ -62,7 +62,7 @@ export default function RulesScreen() {
     const key = ruleKey(rule);
     setSavingKey(key);
     setError(null);
-    fetch(`${API_BASE_URL}/rules`, {
+    apiFetch('/rules', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

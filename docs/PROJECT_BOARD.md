@@ -14,7 +14,7 @@
 
 ## In Progress
 
-(nothing — Phase 12 complete and verified on-device, next phase not yet chosen)
+(nothing — Phase 14 complete and verified live, next phase not yet chosen)
 
 ## Done
 
@@ -70,6 +70,12 @@
 - Added a Call Details screen reached by tapping any call, backed by a new `GET /calls/{id}` endpoint — full transcript, AI summary, decision + transfer outcome, contact match
 - Moved the decision matrix from hardcoded Python logic into a new `rules` table, fully editable from a Rules screen in the app (`GET`/`PUT /rules`) — the user wanted real freedom to change it since "it wont be the same all times"; safety/emergency overrides (spam-reject, urgent-transfers-when-Available, Sleeping family emergency) stay fixed and are labeled as such
 - Added tab bar icons, a new Settings screen (Twilio number, backend URL, whether OpenAI/transfer are configured via `GET /config`), removed a redundant "Manage Contacts" link from Home now that Contacts is its own tab, and fixed the Home title being hidden behind the iPhone 16 Pro's Dynamic Island using the real safe-area inset
+- Skipped calendar integration (Phase 13) — user explicitly doesn't use a calendar that way, not needed
+- Added shared-secret API key auth between the mobile app and backend (`X-API-Key`, enforced once `API_SECRET`/`EXPO_PUBLIC_API_KEY` are configured) and Twilio request signature verification on `/voice/*` (official `twilio` SDK's `RequestValidator`) — both verified live, including a real phone call confirming genuine Twilio signatures are accepted correctly
+- Added `.env.example` for both `backend/` and `mobile/`, documenting every secret/config value without real values
+- Audited caller-facing wording, phone-number privacy, and logging — confirmed already clean by design (no status leaks, transfer number never spoken or returned in JSON, no custom logging of sensitive data)
+- Reviewed and documented database access and call-transcript retention decisions — kept the existing manual delete controls rather than building new automated retention infrastructure for a requirement nobody's hit yet
+- Found and fixed a real bug via live testing: deleting a contact with call history crashed on a foreign-key violation (looked like it worked due to optimistic UI, then reappeared on reload) — fixed with `ON DELETE SET NULL` so historical calls survive contact deletion, verified with disposable test data before touching real data
 
 ## Bugs
 

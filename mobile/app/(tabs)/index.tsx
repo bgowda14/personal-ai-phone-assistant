@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallCard } from '../../components/CallCard';
-import { API_BASE_URL } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
 import { formatDateTime } from '../../lib/format';
 import { STATUS_OPTIONS, Status } from '../../lib/options';
 import type { Call, StatusInterpretation } from '../../lib/types';
@@ -46,14 +46,14 @@ export default function HomeScreen() {
 
   const loadCalls = () => {
     setCallsError(null);
-    return fetch(`${API_BASE_URL}/calls`)
+    return apiFetch('/calls')
       .then((res) => res.json())
       .then((data) => setCalls(data))
       .catch(() => setCallsError('Could not load recent calls'));
   };
 
   const loadStatus = () => {
-    return fetch(`${API_BASE_URL}/status`)
+    return apiFetch('/status')
       .then((res) => res.json())
       .then((data) => {
         setStatus(data.mode);
@@ -94,7 +94,7 @@ export default function HomeScreen() {
     setCustomInstruction(null);
     setCustomExpiresAt(null);
     setError(null);
-    fetch(`${API_BASE_URL}/status`, {
+    apiFetch('/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: option }),
@@ -105,7 +105,7 @@ export default function HomeScreen() {
     if (!naturalInput.trim()) return;
     setInterpreting(true);
     setInterpretError(null);
-    fetch(`${API_BASE_URL}/status/interpret`, {
+    apiFetch('/status/interpret', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruction: naturalInput.trim() }),
@@ -124,7 +124,7 @@ export default function HomeScreen() {
   const confirmCustomStatus = () => {
     if (!pendingInterpretation) return;
     setApplyingCustom(true);
-    fetch(`${API_BASE_URL}/status/apply-custom`, {
+    apiFetch('/status/apply-custom', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pendingInterpretation),
@@ -158,8 +158,8 @@ export default function HomeScreen() {
         call.id === callId ? { ...call, dismissed_at: dismissedAt } : call
       )
     );
-    fetch(`${API_BASE_URL}/calls/${callId}/dismiss`, { method: 'POST' }).catch(
-      () => setCallsError('Could not dismiss call')
+    apiFetch(`/calls/${callId}/dismiss`, { method: 'POST' }).catch(() =>
+      setCallsError('Could not dismiss call')
     );
   };
 

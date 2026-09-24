@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { API_BASE_URL, TWILIO_NUMBER } from '../../lib/api';
+import { API_BASE_URL, TWILIO_NUMBER, apiFetch } from '../../lib/api';
 import type { Config } from '../../lib/types';
 import { styles } from '../../styles/shared';
 
@@ -13,7 +13,7 @@ export default function SettingsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/config`)
+    apiFetch('/config')
       .then((res) => res.json())
       .then(setConfig)
       .catch(() => setError('Could not reach backend'));
@@ -58,6 +58,32 @@ export default function SettingsScreen() {
               }
             >
               {config.transfer_configured ? 'Configured' : 'Not configured'}
+            </Text>
+          </View>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsLabel}>App/backend authentication</Text>
+            <Text
+              style={
+                config.api_key_configured
+                  ? styles.settingsOk
+                  : styles.settingsMissing
+              }
+            >
+              {config.api_key_configured ? 'Enforced' : 'Not enforced'}
+            </Text>
+          </View>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsLabel}>Twilio request verification</Text>
+            <Text
+              style={
+                config.twilio_signature_verified
+                  ? styles.settingsOk
+                  : styles.settingsMissing
+              }
+            >
+              {config.twilio_signature_verified
+                ? 'Enforced'
+                : 'Not enforced'}
             </Text>
           </View>
         </View>

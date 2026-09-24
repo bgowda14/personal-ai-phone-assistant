@@ -5,9 +5,11 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, HTTPException, Response
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from openai import OpenAI
 from pydantic import BaseModel
+from twilio.request_validator import RequestValidator
 
 load_dotenv()
 
@@ -19,7 +21,66 @@ OPENAI_MODEL = "gpt-4o-mini"
 TRANSFER_PHONE_NUMBER = os.environ.get("TRANSFER_PHONE_NUMBER")
 LOCAL_TIMEZONE = ZoneInfo("America/New_York")
 
+# Phase 14 (security/privacy): shared-secret auth between the mobile app and
+# this backend, and Twilio request-signature verification on the webhook
+# endpoints. Both degrade to "unenforced" if unconfigured, matching how
+# OPENAI_API_KEY/TRANSFER_PHONE_NUMBER already behave — lets the two sides
+# (backend env, mobile env) be configured independently without a lockout
+# mid-rollout, at the cost of being opt-in rather than mandatory. See
+# docs/PHASE_14.md for the full reasoning, including why a client-embedded
+# API key is not a "real" secret and what it does and doesn't protect against.
+API_SECRET = os.environ.get("API_SECRET")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL")
+
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
+
+# Endpoints Twilio calls directly (verified separately, see
+# verify_twilio_request) and endpoints that should always stay reachable
+# without a key (health check, interactive docs) are exempt from the
+# mobile-app API key check below.
+_UNAUTHENTICATED_PATH_PREFIXES = (
+    "/voice",
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+)
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if API_SECRET and not request.url.path.startswith(
+        _UNAUTHENTICATED_PATH_PREFIXES
+    ):
+        if request.headers.get("x-api-key") != API_SECRET:
+            return JSONResponse(
+                status_code=401, content={"detail": "Invalid or missing API key"}
+            )
+    return await call_next(request)
+
+
+async def verify_twilio_request(request: Request) -> None:
+    """Dependency for the /voice/* webhook endpoints — confirms the request
+    actually came from Twilio (signed with our Auth Token), not from anyone
+    who discovered the ngrok URL. No-ops if TWILIO_AUTH_TOKEN/PUBLIC_BASE_URL
+    aren't configured yet."""
+    if twilio_validator is None or not PUBLIC_BASE_URL:
+        return
+
+    signature = request.headers.get("x-twilio-signature", "")
+    form = await request.form()
+    params = dict(form)
+
+    path_and_query = request.url.path
+    if request.url.query:
+        path_and_query += f"?{request.url.query}"
+    full_url = PUBLIC_BASE_URL.rstrip("/") + path_and_query
+
+    if not twilio_validator.validate(full_url, params, signature):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
 
 CALLER_TYPES = [
     "family",
@@ -369,13 +430,16 @@ def get_config():
     return {
         "openai_configured": openai_client is not None,
         "transfer_configured": TRANSFER_PHONE_NUMBER is not None,
+        "api_key_configured": API_SECRET is not None,
+        "twilio_signature_verified": twilio_validator is not None
+        and PUBLIC_BASE_URL is not None,
     }
 
 
 MAX_SILENCE_RETRIES = 2
 
 
-@app.post("/voice")
+@app.post("/voice", dependencies=[Depends(verify_twilio_request)])
 def voice(CallSid: str = Form(...), From: str = Form(...)):
     contact = find_contact_by_phone(From)
     is_known_spam = contact is not None and contact[2] == "spam"
@@ -466,7 +530,7 @@ def voice(CallSid: str = Form(...), From: str = Form(...)):
     return Response(content=twiml, media_type="application/xml")
 
 
-@app.post("/voice/intro")
+@app.post("/voice/intro", dependencies=[Depends(verify_twilio_request)])
 def voice_intro(
     CallSid: str = Form(...), SpeechResult: str = Form(""), retry: int = 0
 ):
@@ -508,7 +572,7 @@ def voice_intro(
     return gather_response("Is this urgent?", "/voice/urgency")
 
 
-@app.post("/voice/urgency")
+@app.post("/voice/urgency", dependencies=[Depends(verify_twilio_request)])
 def voice_urgency(
     CallSid: str = Form(...),
     SpeechResult: str = Form(""),
@@ -562,7 +626,9 @@ def voice_urgency(
     return Response(content=twiml, media_type="application/xml")
 
 
-@app.post("/voice/transfer-complete")
+@app.post(
+    "/voice/transfer-complete", dependencies=[Depends(verify_twilio_request)]
+)
 def voice_transfer_complete(
     CallSid: str = Form(...), DialCallStatus: str = Form("")
 ):
