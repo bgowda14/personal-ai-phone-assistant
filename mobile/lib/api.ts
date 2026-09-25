@@ -1,6 +1,8 @@
-// Your Mac's LAN IP running `uvicorn main:app --reload` — update this if your
-// network changes or your Mac gets a new IP.
-export const API_BASE_URL = 'http://100.70.78.175:8000';
+// Permanent AWS Lambda Function URL (Phase 17) — the backend no longer runs
+// on the Mac at all, so this works from anywhere (cellular, any WiFi), not
+// just the home network.
+export const API_BASE_URL =
+  'https://wd6twig5tb4zvkt3wnimvizaf40huxcr.lambda-url.us-east-1.on.aws';
 
 // Fixed infrastructure — Twilio assigns this once, it never changes via the app.
 export const TWILIO_NUMBER = '+1 443-300-0069';
