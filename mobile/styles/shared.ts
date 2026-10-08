@@ -362,6 +362,38 @@ export const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'flex-end',
   },
+  contactCardEditing: {
+    borderColor: '#111',
+    borderWidth: 2,
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  importButton: {
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#111',
+    marginBottom: 12,
+  },
+  importButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111',
+  },
+  cancelEditButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  cancelEditText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+  },
   deleteContactLink: {
     fontSize: 13,
     fontWeight: '500',

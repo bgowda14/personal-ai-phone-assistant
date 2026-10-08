@@ -14,7 +14,10 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     apiFetch('/config')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then(setConfig)
       .catch(() => setError('Could not reach backend'));
   }, []);

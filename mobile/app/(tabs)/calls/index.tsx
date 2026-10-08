@@ -27,7 +27,10 @@ export default function CallsScreen() {
     setError(null);
     setLoading(true);
     return apiFetch(`/calls?limit=${CALLS_LIMIT}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => setCalls(data))
       .catch(() => setError('Could not load call history'))
       .finally(() => setLoading(false));
@@ -62,7 +65,10 @@ export default function CallsScreen() {
 
   const deleteOldCalls = () => {
     apiFetch('/calls/old?days=30', { method: 'DELETE' })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then(() => loadCalls())
       .catch(() => setError('Could not delete old calls'));
   };
@@ -80,7 +86,10 @@ export default function CallsScreen() {
 
   const deleteDismissedCalls = () => {
     apiFetch('/calls/dismissed', { method: 'DELETE' })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then(() => loadCalls())
       .catch(() => setError('Could not delete dismissed calls'));
   };

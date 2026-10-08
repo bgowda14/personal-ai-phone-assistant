@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   Alert,
@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as PhoneContacts from 'expo-contacts/legacy';
 
 import { apiFetch } from '../../lib/api';
 import { PRIORITY_OPTIONS, RELATIONSHIP_OPTIONS } from '../../lib/options';
@@ -27,12 +28,23 @@ export default function ContactsScreen() {
   const [newPriority, setNewPriority] =
     useState<(typeof PRIORITY_OPTIONS)[number]>('normal');
   const [addingContact, setAddingContact] = useState(false);
+  // Set while the form is editing an existing contact instead of adding one.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  // When a contact picked from the phone has several numbers, offer them as
+  // chips instead of guessing which one to use.
+  const [phoneChoices, setPhoneChoices] = useState<
+    { label: string; number: string }[]
+  >([]);
+  const scrollRef = useRef<ScrollView>(null);
 
   const loadContacts = () => {
     setError(null);
     setLoading(true);
     return apiFetch('/contacts')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => setContacts(data))
       .catch(() => setError('Could not load contacts'))
       .finally(() => setLoading(false));
@@ -47,15 +59,59 @@ export default function ContactsScreen() {
     loadContacts().finally(() => setRefreshing(false));
   };
 
-  const addContact = () => {
+  const resetForm = () => {
+    setNewName('');
+    setNewPhone('');
+    setNewRelationship('friend');
+    setNewPriority('normal');
+    setEditingId(null);
+    setPhoneChoices([]);
+  };
+
+  // Uses the system contact picker, which hands back only the contact the
+  // user taps — no address-book permission prompt needed.
+  const importFromPhone = async () => {
+    setError(null);
+    try {
+      const picked = await PhoneContacts.presentContactPickerAsync();
+      if (!picked) return;
+      const numbers = (picked.phoneNumbers ?? [])
+        .filter((p) => p.number)
+        .map((p) => ({ label: p.label || 'phone', number: p.number! }));
+      if (numbers.length === 0) {
+        setError(`${picked.name} has no phone number`);
+        return;
+      }
+      setNewName(picked.name);
+      setNewPhone(numbers[0].number);
+      setPhoneChoices(numbers.length > 1 ? numbers : []);
+    } catch {
+      setError('Could not open your contacts');
+    }
+  };
+
+  const startEditing = (contact: Contact) => {
+    setEditingId(contact.id);
+    setNewName(contact.name);
+    setNewPhone(contact.phone_number);
+    setNewRelationship(
+      contact.relationship as (typeof RELATIONSHIP_OPTIONS)[number]
+    );
+    setNewPriority(contact.priority as (typeof PRIORITY_OPTIONS)[number]);
+    setPhoneChoices([]);
+    setError(null);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const saveContact = () => {
     if (!newName.trim() || !newPhone.trim()) {
       setError('Name and phone number are required');
       return;
     }
     setAddingContact(true);
     setError(null);
-    apiFetch('/contacts', {
-      method: 'POST',
+    apiFetch(editingId === null ? '/contacts' : `/contacts/${editingId}`, {
+      method: editingId === null ? 'POST' : 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newName.trim(),
@@ -69,15 +125,12 @@ export default function ContactsScreen() {
         return res.json();
       })
       .then(() => {
-        setNewName('');
-        setNewPhone('');
-        setNewRelationship('friend');
-        setNewPriority('normal');
+        resetForm();
         return loadContacts();
       })
       .catch(() =>
         setError(
-          "Could not add contact — check the phone number isn't already used"
+          `Could not ${editingId === null ? 'add' : 'save'} contact — check the phone number isn't already used`
         )
       )
       .finally(() => setAddingContact(false));
@@ -90,6 +143,7 @@ export default function ContactsScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
+          if (editingId === contactId) resetForm();
           setContacts((prev) => prev.filter((c) => c.id !== contactId));
           apiFetch(`/contacts/${contactId}`, {
             method: 'DELETE',
@@ -101,6 +155,7 @@ export default function ContactsScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
@@ -109,6 +164,14 @@ export default function ContactsScreen() {
     >
       <StatusBar style="auto" />
       <View style={styles.addContactForm}>
+        <Text style={styles.formTitle}>
+          {editingId === null ? 'Add Contact' : 'Edit Contact'}
+        </Text>
+        {editingId === null && (
+          <Pressable style={styles.importButton} onPress={importFromPhone}>
+            <Text style={styles.importButtonText}>Import from Phone</Text>
+          </Pressable>
+        )}
         <TextInput
           style={styles.textInput}
           placeholder="Name"
@@ -122,6 +185,32 @@ export default function ContactsScreen() {
           onChangeText={setNewPhone}
           keyboardType="phone-pad"
         />
+        {phoneChoices.length > 0 && (
+          <>
+            <Text style={styles.formLabel}>Which number?</Text>
+            <View style={styles.chipRow}>
+              {phoneChoices.map((choice) => (
+                <Pressable
+                  key={choice.number}
+                  style={[
+                    styles.chip,
+                    newPhone === choice.number && styles.chipActive,
+                  ]}
+                  onPress={() => setNewPhone(choice.number)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      newPhone === choice.number && styles.chipTextActive,
+                    ]}
+                  >
+                    {choice.label}: {choice.number}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
         <Text style={styles.formLabel}>Relationship</Text>
         <View style={styles.chipRow}>
           {RELATIONSHIP_OPTIONS.map((option) => (
@@ -166,13 +255,24 @@ export default function ContactsScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
         <Pressable
           style={styles.addContactButton}
-          onPress={addContact}
+          onPress={saveContact}
           disabled={addingContact}
         >
           <Text style={styles.callActionText}>
-            {addingContact ? 'Adding...' : 'Add Contact'}
+            {editingId === null
+              ? addingContact
+                ? 'Adding...'
+                : 'Add Contact'
+              : addingContact
+                ? 'Saving...'
+                : 'Save Changes'}
           </Text>
         </Pressable>
+        {editingId !== null && (
+          <Pressable style={styles.cancelEditButton} onPress={resetForm}>
+            <Text style={styles.cancelEditText}>Cancel</Text>
+          </Pressable>
+        )}
       </View>
 
       <Text style={styles.sectionTitle}>All Contacts</Text>
@@ -182,7 +282,14 @@ export default function ContactsScreen() {
       )}
       <View style={styles.callList}>
         {contacts.map((contact) => (
-          <View key={contact.id} style={styles.contactCard}>
+          <Pressable
+            key={contact.id}
+            style={[
+              styles.contactCard,
+              editingId === contact.id && styles.contactCardEditing,
+            ]}
+            onPress={() => startEditing(contact)}
+          >
             <View style={styles.callNameColumn}>
               <Text style={styles.callName}>{contact.name}</Text>
               <Text style={styles.callCompany}>{contact.phone_number}</Text>
@@ -197,7 +304,7 @@ export default function ContactsScreen() {
             >
               <Text style={styles.deleteContactLink}>Remove</Text>
             </Pressable>
-          </View>
+          </Pressable>
         ))}
       </View>
     </ScrollView>

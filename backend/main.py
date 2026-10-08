@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -393,6 +394,51 @@ class ContactCreate(BaseModel):
     phone_number: str
     relationship: str
     priority: str = "normal"
+
+
+def normalize_phone_number(raw: str) -> str:
+    # Twilio sends caller IDs in E.164 ("+14435551234"), and
+    # find_contact_by_phone() matches exactly — so numbers typed or imported
+    # from the iPhone's address book ("(443) 555-1234") must be stored in the
+    # same form or the contact will never be recognized on a call.
+    digits = re.sub(r"\D", "", raw)
+    if raw.strip().startswith("+"):
+        return "+" + digits
+    if raw.strip().startswith("00"):
+        return "+" + digits[2:]
+    if len(digits) == 10:
+        return "+1" + digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    return "+" + digits
+
+
+def validate_contact(contact: ContactCreate) -> None:
+    if not contact.name.strip():
+        raise HTTPException(status_code=400, detail="name is required")
+    if len(re.sub(r"\D", "", contact.phone_number)) < 7:
+        raise HTTPException(status_code=400, detail="phone_number is not valid")
+    if contact.relationship not in CALLER_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"relationship must be one of {CALLER_TYPES}",
+        )
+    if contact.priority not in CONTACT_PRIORITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"priority must be one of {CONTACT_PRIORITIES}",
+        )
+
+
+def contact_row_to_dict(row) -> dict:
+    return {
+        "id": row[0],
+        "name": row[1],
+        "phone_number": row[2],
+        "relationship": row[3],
+        "priority": row[4],
+        "created_at": row[5].isoformat(),
+    }
 
 
 VALID_ACTIONS = ["TRANSFER", "TAKE_MESSAGE", "SCREEN", "REJECT", "ASK_ME"]
@@ -1033,31 +1079,12 @@ def get_contacts():
                 """
             )
             rows = cur.fetchall()
-    return [
-        {
-            "id": row[0],
-            "name": row[1],
-            "phone_number": row[2],
-            "relationship": row[3],
-            "priority": row[4],
-            "created_at": row[5].isoformat(),
-        }
-        for row in rows
-    ]
+    return [contact_row_to_dict(row) for row in rows]
 
 
 @app.post("/contacts")
 def create_contact(contact: ContactCreate):
-    if contact.relationship not in CALLER_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"relationship must be one of {CALLER_TYPES}",
-        )
-    if contact.priority not in CONTACT_PRIORITIES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"priority must be one of {CONTACT_PRIORITIES}",
-        )
+    validate_contact(contact)
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -1069,8 +1096,8 @@ def create_contact(contact: ContactCreate):
                     RETURNING id, name, phone_number, relationship, priority, created_at;
                     """,
                     (
-                        contact.name,
-                        contact.phone_number,
+                        contact.name.strip(),
+                        normalize_phone_number(contact.phone_number),
                         contact.relationship,
                         contact.priority,
                     ),
@@ -1082,14 +1109,41 @@ def create_contact(contact: ContactCreate):
                 )
             row = cur.fetchone()
         conn.commit()
-    return {
-        "id": row[0],
-        "name": row[1],
-        "phone_number": row[2],
-        "relationship": row[3],
-        "priority": row[4],
-        "created_at": row[5].isoformat(),
-    }
+    return contact_row_to_dict(row)
+
+
+@app.put("/contacts/{contact_id}")
+def update_contact(contact_id: int, contact: ContactCreate):
+    validate_contact(contact)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    UPDATE contacts
+                    SET name = %s, phone_number = %s, relationship = %s, priority = %s
+                    WHERE id = %s
+                    RETURNING id, name, phone_number, relationship, priority, created_at;
+                    """,
+                    (
+                        contact.name.strip(),
+                        normalize_phone_number(contact.phone_number),
+                        contact.relationship,
+                        contact.priority,
+                        contact_id,
+                    ),
+                )
+            except psycopg.errors.UniqueViolation:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A contact with this phone number already exists",
+                )
+            row = cur.fetchone()
+        conn.commit()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact_row_to_dict(row)
 
 
 @app.delete("/contacts/{contact_id}")

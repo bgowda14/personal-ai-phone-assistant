@@ -45,7 +45,10 @@ export default function RulesScreen() {
 
   const loadRules = () => {
     return apiFetch('/rules')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => setRules(data))
       .catch(() => setError('Could not load rules'));
   };
@@ -53,7 +56,10 @@ export default function RulesScreen() {
   useEffect(() => {
     loadRules();
     apiFetch('/status')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then(setStatus)
       .catch(() => {});
   }, []);

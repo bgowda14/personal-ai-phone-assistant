@@ -47,14 +47,20 @@ export default function HomeScreen() {
   const loadCalls = () => {
     setCallsError(null);
     return apiFetch('/calls')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => setCalls(data))
       .catch(() => setCallsError('Could not load recent calls'));
   };
 
   const loadStatus = () => {
     return apiFetch('/status')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => {
         setStatus(data.mode);
         setCustomInstruction(data.custom_instruction);
@@ -129,7 +135,10 @@ export default function HomeScreen() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pendingInterpretation),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        return res.json();
+      })
       .then((data) => {
         setStatus(data.mode);
         setCustomInstruction(data.custom_instruction);
