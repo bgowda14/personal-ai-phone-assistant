@@ -2,20 +2,18 @@
 
 ## Backlog
 
-- Install Expo Go on iPhone SE (blocked — need charging cable), then run app on it
-- ngrok free-tier URL is ephemeral — consider a reserved/static domain before relying on it day-to-day
-- Handle calls where the caller hangs up mid-flow (currently stuck at `status='in_progress'` forever — no `statusCallback` webhook yet)
+- Make contact priority (critical/high/normal/low) affect routing — currently stored and shown, but routing uses relationship + spoken urgency only
+- Supabase free tier pauses the database after ~1 week idle — consider a scheduled keep-alive ping
+- Standalone iOS build is signed with a free Apple account, so it must be rebuilt/re-signed every 7 days
 - Phase 11 (push notifications): explicitly declined by user, not deferred — Expo Go dropped remote push support in SDK 53+, so real push needs a development build + a $99/year Apple Developer Program membership just for the push credentials. Not worth it for a personal project right now. Revisit only if the user brings it up again; don't re-suggest unprompted. The app still refreshes fine on load, pull-to-refresh, and when it comes back to the foreground.
 - Sleeping + family caller: still goes through the full Q&A instead of a live emergency check (real urgency needs an answer before deciding transfer-vs-message) — deferred, see PHASE_8.md notes
 - A call abandoned before it finishes (caller hangs up mid-Q&A, before any transfer decision) is still stuck at `status='in_progress'` forever — deferred to Phase 15 (Testing)
-- Phase 9.5: forward the real main US Mobile number to Twilio — explicitly on hold by user decision. The Twilio Fallback URL safety net (Phase 15) is now built, closing one of the two reliability gaps that motivated the hold; full 24/7 uptime (Docker/AWS, Phase 16/17) is still the other. Still needs an explicit fresh go-ahead before touching the main number.
 - In-app voice recording for "Tell My Assistant" (record + transcribe via OpenAI) — not needed for now, the iPhone keyboard's built-in dictation mic already covers this need for free
-- Phase 15 Scenarios 11/12 (main number forwarding + loop prevention) — correctly out of scope until Phase 9.5 is picked back up, nothing to test yet
 - An interactive "AI asks a clarifying question" flow (Phase 15's Scenario 6 as literally worded) — not built; current behavior degrades safely to sensible defaults on unclear input instead, which was judged sufficient for now
 
 ## In Progress
 
-- Phase 17: AWS deployment — user needs to create an AWS account first (external, manual step). Plan is Lambda (container image support, Always-Free tier, no 6-month credit clock) rather than EC2, given the account is new and AWS's new-account free tier changed to a 6-month/$200-credit structure in July 2025.
+- Phase 18: résumé / GitHub polish (README rewritten, LinkedIn post drafted)
 
 ## Done
 
@@ -81,6 +79,13 @@
 - Built a global exception handler for `/voice/*` so any unhandled backend error (database outage, etc.) during a live call degrades to a normal-sounding apology instead of Twilio's generic error tone — verified with a simulated DB outage via `TestClient`
 - Built a Twilio Fallback URL (a TwiML Bin hosted by Twilio, not our backend) so a fully unreachable backend (Mac off, ngrok down) still gets callers a graceful message + a direct ring to the user's real phone instead of a broken-sounding error — verified live by stopping the backend and placing a real call
 - Containerized the backend (`Dockerfile` + `docker-compose.yml`) and verified full behavior parity — swapped the live Twilio-facing ngrok tunnel over to the Docker container with zero disruption, confirmed DB/OpenAI/both auth layers all work identically inside the container
+- Deployed the backend to AWS Lambda as a container image (Lambda Web Adapter, Function URL) and retired ngrok — verified a real call, including a live transfer, with every local process on the Mac shut down (Milestone: runs 24/7 without the Mac). See PHASE_17.md
+- Forwarded the real main US Mobile number to the Twilio number (Phase 9.5), toggled on/off manually from the carrier side
+- Installed the app as a standalone home-screen iPhone app ("AI Assistant", custom icon) via a local Xcode build with a free Apple account — runs without Expo Go or the Mac, installs over Wi-Fi
+- Fixed two launch crashes in the standalone build: Expo's `app.config` generation script broke on the space in the project path (patched via a `postinstall` script), and screens crashed on backend error responses instead of showing an error (every fetch now checks `res.ok`)
+- Added "Import from Phone" on the Contacts screen (native iOS contact picker, no address-book permission needed) and tap-to-edit contacts (`PUT /contacts/{id}`)
+- Backend now normalizes every saved contact number to E.164, so numbers imported as `(443) 555-1234` still match Twilio's caller ID
+- Rewrote the README to describe the finished, live system
 
 ## Bugs
 
