@@ -1,6 +1,8 @@
 import type { ComponentProps } from 'react';
 import type { Stack } from 'expo-router';
 
+import { colors, fonts } from './theme';
+
 type StackOptions = NonNullable<ComponentProps<typeof Stack>['screenOptions']>;
 
 // iOS-style headers: a large title that collapses into the bar as you
@@ -13,4 +15,7 @@ export const largeTitleOptions: StackOptions = {
   headerTransparent: true,
   headerLargeTitleShadowVisible: false,
   headerShadowVisible: false,
+  headerTintColor: colors.text,
+  headerTitleStyle: { color: colors.text, fontFamily: fonts.semibold },
+  headerLargeTitleStyle: { color: colors.text, fontFamily: fonts.medium },
 };

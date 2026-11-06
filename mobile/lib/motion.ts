@@ -56,3 +56,37 @@ export const haptic = {
       () => {}
     ),
 };
+
+// List rows rising into place on first load, 40ms apart. Capped so a long
+// list never makes the user wait for the last row. Keyframe.delay mutates
+// its instance, so each slot gets its own.
+const RISE_SLOTS = 8;
+const RISE_IN = Array.from({ length: RISE_SLOTS + 1 }, (_, i) =>
+  new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: 14 }, { scale: 0.98 }] },
+    100: {
+      opacity: 1,
+      transform: [{ translateY: 0 }, { scale: 1 }],
+      easing: EASE_OUT,
+    },
+  })
+    .duration(340)
+    .delay(i * 40)
+);
+export const riseIn = (index: number) =>
+  RISE_IN[Math.min(index, RISE_SLOTS)];
+
+// Slow cross-fade for big color fields (the mode backdrop and hero card).
+export const CROSSFADE_IN = FadeIn.duration(420).easing(EASE_OUT);
+export const CROSSFADE_OUT = FadeOut.duration(420).easing(EASE_OUT);
+
+// A soft ring expanding off the "live" dot — the assistant is on duty.
+export const pulseRing = {
+  animationName: {
+    from: { opacity: 0.55, transform: [{ scale: 1 }] },
+    to: { opacity: 0, transform: [{ scale: 2.6 }] },
+  },
+  animationDuration: '1.8s',
+  animationIterationCount: 'infinite',
+  animationTimingFunction: EASE_OUT_CSS,
+} as const;

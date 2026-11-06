@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -12,8 +13,19 @@ import {
 import * as PhoneContacts from 'expo-contacts/legacy';
 import Animated from 'react-native-reanimated';
 
+import { EmptyState } from '../../../components/EmptyState';
 import { PressableScale } from '../../../components/PressableScale';
-
+import {
+  AuraScrollView,
+  Avatar,
+  Card,
+  GradientButton,
+  Icon,
+  IconTile,
+  Pill,
+  SectionHeader,
+  TintButton,
+} from '../../../components/ui';
 import { apiFetch } from '../../../lib/api';
 import {
   ENTER,
@@ -22,8 +34,17 @@ import {
   REFLOW,
   colorTransition,
   haptic,
+  riseIn,
 } from '../../../lib/motion';
 import { PRIORITY_OPTIONS, RELATIONSHIP_OPTIONS } from '../../../lib/options';
+import {
+  PRIORITY_COLORS,
+  RELATIONSHIP_COLORS,
+  colors,
+  gradientFor,
+  palette,
+  tint,
+} from '../../../lib/theme';
 import type { Contact } from '../../../lib/types';
 import { styles } from '../../../styles/shared';
 
@@ -167,177 +188,245 @@ export default function ContactsScreen() {
   };
 
   return (
-    <ScrollView
+    <AuraScrollView
       ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
+      keyboardDismissMode="interactive"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <StatusBar style="auto" />
-      <Animated.View layout={REFLOW} style={styles.addContactForm}>
-        <Text style={styles.formTitle}>
-          {editingId === null ? 'Add Contact' : 'Edit Contact'}
-        </Text>
-        {editingId === null && (
-          <Animated.View entering={FADE_IN} exiting={EXIT}>
-            <PressableScale
-              style={styles.importButton}
-              onPress={importFromPhone}
-            >
-              <Text style={styles.importButtonText}>Import from Phone</Text>
-            </PressableScale>
-          </Animated.View>
-        )}
-        <TextInput
-          style={styles.textInput}
-          placeholder="Name"
-          value={newName}
-          onChangeText={setNewName}
-        />
-        <TextInput
-          style={styles.textInput}
-          placeholder="+15551234567"
-          value={newPhone}
-          onChangeText={setNewPhone}
-          keyboardType="phone-pad"
-        />
-        {phoneChoices.length > 0 && (
-          <Animated.View entering={ENTER} exiting={EXIT}>
-            <Text style={styles.formLabel}>Which number?</Text>
-            <View style={styles.chipRow}>
-              {phoneChoices.map((choice) => (
-                <Chip
-                  key={choice.number}
-                  label={`${choice.label}: ${choice.number}`}
-                  active={newPhone === choice.number}
-                  onSelect={() => setNewPhone(choice.number)}
-                />
-              ))}
-            </View>
-          </Animated.View>
-        )}
-        <Text style={styles.formLabel}>Relationship</Text>
-        <View style={styles.chipRow}>
-          {RELATIONSHIP_OPTIONS.map((option) => (
-            <Chip
-              key={option}
-              label={option}
-              active={newRelationship === option}
-              onSelect={() => setNewRelationship(option)}
+      <StatusBar style="dark" />
+      <Animated.View layout={REFLOW} style={styles.section}>
+        <Card style={styles.formCard}>
+          <View style={styles.assistantHeader}>
+            <IconTile
+              name={editingId === null ? 'person.badge.plus' : 'pencil'}
+              color={editingId === null ? palette.blue : palette.orange}
             />
-          ))}
-        </View>
-        <Text style={styles.formLabel}>Priority</Text>
-        <View style={styles.chipRow}>
-          {PRIORITY_OPTIONS.map((option) => (
-            <Chip
-              key={option}
-              label={option}
-              active={newPriority === option}
-              onSelect={() => setNewPriority(option)}
+            <Text style={styles.formTitle}>
+              {editingId === null ? 'Add Contact' : 'Edit Contact'}
+            </Text>
+          </View>
+          {editingId === null && (
+            <Animated.View entering={FADE_IN} exiting={EXIT}>
+              <TintButton
+                label="Import from Phone"
+                icon="person.crop.circle.badge.plus"
+                color={palette.blue}
+                onPress={importFromPhone}
+              />
+            </Animated.View>
+          )}
+          <View style={styles.inputRow}>
+            <Icon name="person.fill" size={16} color={colors.textTertiary} />
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              placeholderTextColor={colors.textTertiary}
+              value={newName}
+              onChangeText={setNewName}
             />
-          ))}
-        </View>
-        {error && (
-          <Animated.Text entering={FADE_IN} style={styles.error}>
-            {error}
-          </Animated.Text>
-        )}
-        <PressableScale
-          style={styles.addContactButton}
-          onPress={saveContact}
-          disabled={addingContact}
-        >
-          <Text style={styles.callActionText}>
-            {editingId === null
-              ? addingContact
-                ? 'Adding...'
-                : 'Add Contact'
-              : addingContact
-                ? 'Saving...'
-                : 'Save Changes'}
-          </Text>
-        </PressableScale>
-        {editingId !== null && (
-          <Animated.View entering={FADE_IN} exiting={EXIT}>
-            <Pressable style={styles.cancelEditButton} onPress={resetForm}>
-              <Text style={styles.cancelEditText}>Cancel</Text>
-            </Pressable>
-          </Animated.View>
-        )}
+          </View>
+          <View style={styles.inputRow}>
+            <Icon name="phone.fill" size={16} color={colors.textTertiary} />
+            <TextInput
+              style={styles.input}
+              placeholder="+15551234567"
+              placeholderTextColor={colors.textTertiary}
+              value={newPhone}
+              onChangeText={setNewPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
+          {phoneChoices.length > 0 && (
+            <Animated.View entering={ENTER} exiting={EXIT} style={{ gap: 12 }}>
+              <Text style={styles.formLabel}>Which number?</Text>
+              <View style={styles.chipRow}>
+                {phoneChoices.map((choice) => (
+                  <Chip
+                    key={choice.number}
+                    label={`${choice.label}: ${choice.number}`}
+                    color={palette.blue}
+                    active={newPhone === choice.number}
+                    onSelect={() => setNewPhone(choice.number)}
+                  />
+                ))}
+              </View>
+            </Animated.View>
+          )}
+          <Text style={styles.formLabel}>Relationship</Text>
+          <View style={styles.chipRow}>
+            {RELATIONSHIP_OPTIONS.map((option) => (
+              <Chip
+                key={option}
+                label={option}
+                color={RELATIONSHIP_COLORS[option]}
+                active={newRelationship === option}
+                onSelect={() => setNewRelationship(option)}
+              />
+            ))}
+          </View>
+          <Text style={styles.formLabel}>Priority</Text>
+          <View style={styles.chipRow}>
+            {PRIORITY_OPTIONS.map((option) => (
+              <Chip
+                key={option}
+                label={option}
+                color={PRIORITY_COLORS[option]}
+                active={newPriority === option}
+                onSelect={() => setNewPriority(option)}
+              />
+            ))}
+          </View>
+          {error && (
+            <Animated.Text entering={FADE_IN} style={styles.error}>
+              {error}
+            </Animated.Text>
+          )}
+          <GradientButton
+            label={
+              editingId === null
+                ? addingContact
+                  ? 'Adding...'
+                  : 'Add Contact'
+                : addingContact
+                  ? 'Saving...'
+                  : 'Save Changes'
+            }
+            icon={editingId === null ? 'plus' : 'checkmark'}
+            onPress={saveContact}
+            disabled={addingContact}
+          />
+          {editingId !== null && (
+            <Animated.View entering={FADE_IN} exiting={EXIT}>
+              <Pressable style={styles.cancelButton} onPress={resetForm}>
+                <Text style={[styles.linkText, { color: colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </Animated.View>
+          )}
+        </Card>
       </Animated.View>
 
       <Animated.View layout={REFLOW} style={styles.section}>
-        <Text style={styles.sectionTitle}>All Contacts</Text>
+        <SectionHeader
+          title="All Contacts"
+          right={
+            contacts.length > 0 ? (
+              <Text style={styles.textMuted}>{contacts.length}</Text>
+            ) : undefined
+          }
+        />
       </Animated.View>
       {loading && contacts.length === 0 && (
-        <Text style={styles.emptyText}>Loading...</Text>
+        <ActivityIndicator style={styles.loading} color={colors.accent} />
       )}
       {!loading && contacts.length === 0 && (
-        <Animated.Text entering={FADE_IN} style={styles.emptyText}>
-          No contacts yet
-        </Animated.Text>
+        <EmptyState
+          icon="person.2.fill"
+          color={palette.blue}
+          title="No contacts yet"
+          subtitle="Saved contacts skip the AI and follow their relationship's rules."
+        />
       )}
-      <Animated.View layout={REFLOW} style={styles.callList}>
-        {contacts.map((contact) => (
-          // Removed contacts fade out and the rest slide up to fill the gap.
-          <Animated.View
-            key={contact.id}
-            entering={FADE_IN}
-            exiting={EXIT}
-            layout={REFLOW}
-          >
-            <PressableScale
-              style={[
-                styles.contactCard,
-                editingId === contact.id && styles.contactCardEditing,
-              ]}
-              onPress={() => startEditing(contact)}
-            >
-              <View style={styles.callNameColumn}>
-                <Text style={styles.callName}>{contact.name}</Text>
-                <Text style={styles.callCompany}>{contact.phone_number}</Text>
-              </View>
-              <View style={styles.contactBadgeColumn}>
-                <Text style={styles.callTypeBadge}>{contact.relationship}</Text>
-                <Text style={styles.callPriorityBadge}>{contact.priority}</Text>
-              </View>
-              <Pressable
-                hitSlop={8}
-                onPress={() => confirmDeleteContact(contact.id, contact.name)}
-              >
-                <Text style={styles.deleteContactLink}>Remove</Text>
-              </Pressable>
-            </PressableScale>
-          </Animated.View>
-        ))}
-      </Animated.View>
-    </ScrollView>
+      {contacts.length > 0 && (
+        <Animated.View layout={REFLOW} style={styles.section}>
+          <Card style={styles.groupedCard}>
+            {contacts.map((contact, index) => {
+              const relColor =
+                RELATIONSHIP_COLORS[contact.relationship] ?? palette.gray;
+              const prioColor =
+                PRIORITY_COLORS[contact.priority] ?? palette.gray;
+              return (
+                // Removed contacts fade out and the rest slide up to fill
+                // the gap.
+                <Animated.View
+                  key={contact.id}
+                  entering={riseIn(index)}
+                  exiting={EXIT}
+                  layout={REFLOW}
+                >
+                  {index > 0 && (
+                    <View style={[styles.hairline, styles.contactSeparator]} />
+                  )}
+                  <PressableScale
+                    style={[
+                      styles.contactRow,
+                      editingId === contact.id && styles.contactRowEditing,
+                    ]}
+                    onPress={() => startEditing(contact)}
+                  >
+                    <Avatar
+                      name={contact.name}
+                      gradient={gradientFor(relColor)}
+                    />
+                    <View style={styles.flex}>
+                      <Text style={styles.callName} numberOfLines={1}>
+                        {contact.name}
+                      </Text>
+                      <Text style={styles.callSub}>{contact.phone_number}</Text>
+                    </View>
+                    <View style={styles.contactMeta}>
+                      <Pill label={contact.relationship} color={relColor} />
+                      <View style={styles.contactPriority}>
+                        <Icon name="flag.fill" size={10} color={prioColor} />
+                        <Text
+                          style={[styles.contactPriorityText, { color: prioColor }]}
+                        >
+                          {contact.priority}
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      hitSlop={8}
+                      accessibilityLabel={`Remove ${contact.name}`}
+                      style={[
+                        styles.removeButton,
+                        { backgroundColor: tint(palette.red, 0.1) },
+                      ]}
+                      onPress={() =>
+                        confirmDeleteContact(contact.id, contact.name)
+                      }
+                    >
+                      <Icon name="trash" size={14} color={palette.red} />
+                    </Pressable>
+                  </PressableScale>
+                </Animated.View>
+              );
+            })}
+          </Card>
+        </Animated.View>
+      )}
+    </AuraScrollView>
   );
 }
 
-// A selectable chip: tick haptic on a new choice, and the fill and label
-// colors cross-fade together.
+// A selectable chip in its option's color: tick haptic on a new choice,
+// and the fill and label colors cross-fade together.
 function Chip({
   label,
+  color,
   active,
   onSelect,
 }: {
   label: string;
+  color: string;
   active: boolean;
   onSelect: () => void;
 }) {
   return (
     <PressableScale
-      style={[styles.chip, active && styles.chipActive]}
+      style={[styles.chip, active && { backgroundColor: color }]}
       onPress={() => {
         if (!active) haptic.select();
         onSelect();
       }}
     >
+      {!active && <View style={[styles.chipDot, { backgroundColor: color }]} />}
       <Animated.Text
         style={[styles.chipText, colorTransition, active && styles.chipTextActive]}
       >

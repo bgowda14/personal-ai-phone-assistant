@@ -1,10 +1,15 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
+import { colors, fonts } from '../../lib/theme';
+
 // The platform's real tab bar (Liquid Glass on iOS 26) — its own
 // transitions, scroll-to-top and minimize-on-scroll come for free.
 export default function TabsLayout() {
   return (
-    <NativeTabs>
+    <NativeTabs
+      tintColor={colors.ink}
+      labelStyle={{ fontFamily: fonts.medium }}
+    >
       <NativeTabs.Trigger name="(home)">
         <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>

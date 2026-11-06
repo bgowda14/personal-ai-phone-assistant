@@ -1,525 +1,690 @@
 import { StyleSheet } from 'react-native';
 
+import { colors, fonts } from '../lib/theme';
+
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f7',
+    backgroundColor: colors.background,
   },
   content: {
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 48,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 32,
-  },
-  label: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  status: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  error: {
-    fontSize: 13,
-    color: '#c0392b',
-    marginBottom: 20,
   },
   section: {
     width: '100%',
   },
-  centeredSection: {
+  error: {
     width: '100%',
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.danger,
+    marginVertical: 8,
+  },
+  loading: {
+    marginTop: 32,
+  },
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.5,
+  flex: {
+    flex: 1,
   },
-  buttonRow: {
+  linkText: {
+    fontSize: 15,
+    fontFamily: fonts.medium,
+    color: colors.accent,
+  },
+  textMuted: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+  },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+  },
+
+  // Empty state
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    gap: 6,
+  },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+
+  // Home: mode backdrop and hero card
+  heroShadow: {
     width: '100%',
-    gap: 12,
-  },
-  button: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    borderRadius: 36,
     borderCurve: 'continuous',
-    paddingVertical: 14,
+    boxShadow: '0 18px 40px rgba(40,30,20,0.20)',
+  },
+  hero: {
+    minHeight: 250,
+    justifyContent: 'space-between',
+    gap: 18,
+    borderRadius: 36,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    padding: 22,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
-  buttonActive: {
-    backgroundColor: '#111',
-    borderColor: '#111',
+  heroLive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#111',
-  },
-  buttonTextActive: {
+  heroLiveText: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
     color: '#fff',
   },
-  sectionTitleRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 12,
+  heroLabel: {
+    fontSize: 17,
+    fontFamily: fonts.regular,
+    color: 'rgba(255,255,255,0.85)',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  heroMode: {
+    fontSize: 50,
+    fontFamily: fonts.medium,
+    color: '#fff',
+    letterSpacing: -1,
   },
-  sectionTitleStandalone: {
-    width: '100%',
-    marginTop: 32,
-    marginBottom: 12,
-  },
-  viewAllLink: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1a5276',
-  },
-  manageContactsLink: {
-    width: '100%',
-    alignItems: 'flex-end',
-    marginTop: 12,
-  },
-  deleteButtonRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  deleteButtonHalf: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  deleteOldButton: {
-    width: '100%',
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: '#c0392b',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  deleteOldButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#c0392b',
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#666',
-    alignSelf: 'flex-start',
-  },
-  callList: {
-    width: '100%',
-    gap: 12,
-  },
-  callCard: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 14,
-    backgroundColor: '#fff',
-  },
-  callCardDismissed: {
-    opacity: 0.5,
-  },
-  callCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  callNameColumn: {
-    flexShrink: 1,
-  },
-  callName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
-  },
-  callCompany: {
-    fontSize: 13,
-    color: '#666',
+  heroTagline: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
-  callTime: {
-    fontSize: 12,
-    color: '#888',
+  heroRule: {
+    padding: 14,
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    gap: 6,
   },
-  callReason: {
+  heroRuleText: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    fontStyle: 'italic',
+    color: '#fff',
+  },
+  heroRuleExpiry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  heroRuleExpiryText: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    color: 'rgba(255,255,255,0.9)',
+  },
+
+  // Home: status picker grid
+  modeGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  modeTile: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 22,
+    padding: 14,
+    borderRadius: 26,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  modeTileText: {
+    fontSize: 15,
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  modeTileTextActive: {
+    color: '#fff',
+  },
+
+  // Home: Tell My Assistant
+  assistantCard: {
+    gap: 12,
+  },
+  assistantInput: {
+    minHeight: 84,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: colors.hairline,
+    borderRadius: 22,
+    borderCurve: 'continuous',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    textAlignVertical: 'top',
+  },
+  assistantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  assistantHeaderText: {
+    fontSize: 17,
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  confirmSummary: {
+    fontSize: 17,
+    fontFamily: fonts.regular,
+    lineHeight: 23,
+    color: colors.text,
+  },
+  confirmLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  confirmLineText: {
     fontSize: 14,
-    color: '#333',
-    marginTop: 6,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    flexShrink: 1,
+  },
+  buttonPair: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  // Lists of cards
+  cardList: {
+    width: '100%',
+    gap: 12,
+  },
+  dayHeader: {
+    fontSize: 13,
+    fontFamily: fonts.semibold,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 12,
+    marginLeft: 4,
+  },
+
+  // Call card
+  callCard: {
+    gap: 12,
+  },
+  callCardDismissed: {
+    opacity: 0.55,
+  },
+  callHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  callName: {
+    fontSize: 17,
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  callSub: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  callTime: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textTertiary,
+    alignSelf: 'flex-start',
+  },
+  callMessage: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    lineHeight: 21,
+    color: '#2C2C30',
   },
   callRecommendation: {
-    fontSize: 13,
-    color: '#1a5276',
-    fontWeight: '500',
-    marginTop: 6,
+    flexDirection: 'row',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderCurve: 'continuous',
   },
-  callMetaRow: {
+  callRecommendationText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: fonts.medium,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  callFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
-  },
-  callBadgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    flexShrink: 1,
     gap: 8,
-    alignItems: 'center',
-  },
-  decisionBadge: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#444',
-    backgroundColor: '#eee',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderCurve: 'continuous',
-  },
-  decisionBadgeTransfer: {
-    color: '#fff',
-    backgroundColor: '#1a5276',
-  },
-  decisionBadgeReject: {
-    color: '#fff',
-    backgroundColor: '#c0392b',
-  },
-  decisionBadgeFailed: {
-    color: '#fff',
-    backgroundColor: '#946c00',
-  },
-  callTypeBadge: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#444',
-    backgroundColor: '#eee',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderCurve: 'continuous',
-    textTransform: 'capitalize',
-  },
-  callPriorityBadge: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#666',
-    backgroundColor: '#eee',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderCurve: 'continuous',
-    textTransform: 'capitalize',
-  },
-  callPriorityHigh: {
-    color: '#fff',
-    backgroundColor: '#c0392b',
-  },
-  callUrgency: {
-    fontSize: 12,
-    color: '#c0392b',
-    fontWeight: '500',
   },
   callStatus: {
     fontSize: 12,
-    color: '#888',
+    fontFamily: fonts.medium,
+    color: colors.textTertiary,
     textTransform: 'capitalize',
   },
-  callActionRow: {
+  callUrgency: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.danger,
+  },
+
+  // Calls: stats and cleanup
+  statsCard: {
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+  },
+  statValue: {
+    fontSize: 26,
+    fontFamily: fonts.semibold,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+  },
+  cleanupRow: {
+    width: '100%',
     flexDirection: 'row',
     gap: 10,
     marginTop: 12,
   },
-  callActionButton: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    backgroundColor: '#111',
-  },
-  callActionGhost: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-  },
-  callActionText: {
+  cleanupText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
+    fontFamily: fonts.regular,
   },
-  callActionGhostText: {
-    color: '#444',
-  },
-  activeRuleBanner: {
+
+  // Call details
+  detailHeader: {
     width: '100%',
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#1a5276',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 12,
-    backgroundColor: '#eaf1f8',
+    alignItems: 'center',
+    paddingTop: 8,
+    gap: 4,
   },
-  activeRuleText: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    color: '#1a5276',
+  detailName: {
+    fontSize: 26,
+    fontFamily: fonts.semibold,
+    color: colors.text,
+    letterSpacing: -0.4,
+    marginTop: 10,
+    textAlign: 'center',
   },
-  activeRuleExpiry: {
-    fontSize: 12,
-    color: '#1a5276',
-    marginTop: 4,
-  },
-  naturalInputBox: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 14,
-    backgroundColor: '#fff',
-    marginBottom: 24,
-  },
-  naturalInputField: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  confirmSummary: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 10,
-  },
-  addContactForm: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 14,
-    backgroundColor: '#fff',
-    marginBottom: 24,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    borderCurve: 'continuous',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  detailPhone: {
     fontSize: 15,
-    marginBottom: 10,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+  },
+  detailPills: {
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  detailActions: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  actionTile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  actionTileSolid: {
+    backgroundColor: colors.ink,
+  },
+  actionTileGlass: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  actionTileText: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+  aiCard: {
+    marginTop: 16,
+    gap: 10,
+  },
+  aiTitle: {
+    fontSize: 15,
+    fontFamily: fonts.semibold,
+  },
+  aiBody: {
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  detailList: {
+    marginTop: 16,
+    paddingVertical: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  detailRowLabel: {
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+  },
+  detailRowValue: {
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    lineHeight: 21,
+    color: colors.text,
+    marginTop: 2,
+  },
+  detailRowError: {
+    color: colors.danger,
+  },
+  detailRowSeparator: {
+    marginLeft: 42,
+  },
+
+  // Contacts: form
+  formCard: {
+    gap: 12,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontFamily: fonts.semibold,
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.fill,
+    borderRadius: 14,
+    borderCurve: 'continuous',
+    paddingHorizontal: 14,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 13,
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
   },
   formLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 6,
-    marginTop: 4,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+    marginBottom: -4,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 10,
   },
   chip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    borderCurve: 'continuous',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.fill,
   },
-  chipActive: {
-    backgroundColor: '#111',
-    borderColor: '#111',
+  chipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   chipText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#444',
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    color: colors.text,
     textTransform: 'capitalize',
   },
   chipTextActive: {
     color: '#fff',
+    fontFamily: fonts.semibold,
   },
-  addContactButton: {
-    marginTop: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderCurve: 'continuous',
+  cancelButton: {
     alignItems: 'center',
-    backgroundColor: '#111',
+    paddingVertical: 6,
   },
-  contactCard: {
+
+  // Contacts: list
+  groupedCard: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'hidden',
+  },
+  contactRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 14,
-    backgroundColor: '#fff',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  contactBadgeColumn: {
-    gap: 6,
+  contactRowEditing: {
+    backgroundColor: '#EEEDFD',
+  },
+  contactSeparator: {
+    marginLeft: 70,
+  },
+  contactMeta: {
     alignItems: 'flex-end',
+    gap: 5,
   },
-  contactCardEditing: {
-    borderColor: '#111',
-    borderWidth: 2,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  importButton: {
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderCurve: 'continuous',
+  contactPriority: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#111',
-    marginBottom: 12,
+    gap: 3,
   },
-  importButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111',
+  contactPriorityText: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    textTransform: 'capitalize',
   },
-  cancelEditButton: {
-    marginTop: 8,
-    paddingVertical: 8,
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  cancelEditText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#666',
+
+  // Settings
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
-  deleteContactLink: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#c0392b',
-    marginLeft: 12,
+  profileTitle: {
+    fontSize: 20,
+    fontFamily: fonts.semibold,
+    color: colors.text,
   },
-  // Call Details screen
-  detailName: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-    marginTop: 8,
+  profileSubtitle: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
-  detailSection: {
+  settingsGroupTitle: {
     width: '100%',
-    marginTop: 18,
-  },
-  // Settings screen
-  settingsCard: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    borderCurve: 'continuous',
-    padding: 14,
-    backgroundColor: '#fff',
-    marginBottom: 14,
-    gap: 10,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 26,
+    marginBottom: 8,
+    marginLeft: 16,
   },
   settingsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   settingsLabel: {
-    fontSize: 13,
-    color: '#666',
+    flex: 1,
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
   },
   settingsValue: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#111',
-    marginTop: 2,
+    fontFamily: fonts.regular,
+    color: colors.textSecondary,
+    flexShrink: 1,
   },
-  settingsOk: {
+  settingsSeparator: {
+    marginLeft: 56,
+  },
+  healthValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  healthText: {
+    fontSize: 15,
+    fontFamily: fonts.medium,
+  },
+  footer: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#1e7d32',
+    fontFamily: fonts.regular,
+    color: colors.textTertiary,
+    marginTop: 28,
   },
-  settingsMissing: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#c0392b',
-  },
-  // Rules screen
-  rulesNote: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 16,
-  },
-  rulesSection: {
+
+  // Rules
+  ruleBanner: {
     width: '100%',
-  },
-  rulesTable: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
+    borderRadius: 22,
     borderCurve: 'continuous',
-    backgroundColor: '#fff',
     overflow: 'hidden',
+    padding: 16,
+    gap: 6,
+    marginBottom: 12,
+  },
+  ruleBannerLabel: {
+    fontSize: 12,
+    fontFamily: fonts.semibold,
+    color: 'rgba(255,255,255,0.85)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  noteCard: {
+    gap: 12,
+  },
+  noteRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    lineHeight: 20,
+    color: colors.textSecondary,
   },
   rulesRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   rulesType: {
-    fontSize: 14,
-    color: '#333',
+    flex: 1,
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
     textTransform: 'capitalize',
-    flexShrink: 1,
-    paddingRight: 12,
   },
-  rulesAction: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1a5276',
+  chevronOpen: {
+    transform: [{ rotate: '180deg' }],
   },
   rulesEditRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+  },
+  rulesSeparator: {
+    marginLeft: 16,
   },
 });

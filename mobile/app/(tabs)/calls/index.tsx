@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Alert,
+  AppState,
   Linking,
   RefreshControl,
-  ScrollView,
   Text,
   View,
 } from 'react-native';
@@ -12,9 +13,17 @@ import {
 import Animated from 'react-native-reanimated';
 
 import { CallCard } from '../../../components/CallCard';
-import { PressableScale } from '../../../components/PressableScale';
+import { EmptyState } from '../../../components/EmptyState';
+import {
+  AuraScrollView,
+  Card,
+  TintButton,
+} from '../../../components/ui';
 import { apiFetch } from '../../../lib/api';
-import { EXIT, FADE_IN, REFLOW, haptic } from '../../../lib/motion';
+import { decisionBadgeVariant } from '../../../lib/decisions';
+import { dayLabel } from '../../../lib/format';
+import { EXIT, FADE_IN, REFLOW, haptic, riseIn } from '../../../lib/motion';
+import { colors, palette } from '../../../lib/theme';
 import type { Call } from '../../../lib/types';
 import { styles } from '../../../styles/shared';
 
@@ -41,6 +50,20 @@ export default function CallsScreen() {
 
   useEffect(() => {
     loadCalls();
+  }, []);
+
+  // Refresh whenever the app comes back to the foreground (e.g. after
+  // backgrounding it to make a phone call). Real-time push updates without
+  // reopening the app would need Phase 11 (declined).
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appState.current !== 'active' && nextState === 'active') {
+        loadCalls();
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
   }, []);
 
   const onRefresh = () => {
@@ -119,8 +142,27 @@ export default function CallsScreen() {
     );
   };
 
+  const stats = [
+    { label: 'Total', value: calls.length, color: colors.text },
+    {
+      label: 'Put Through',
+      value: calls.filter((c) => decisionBadgeVariant(c) === 'transfer').length,
+      color: palette.green,
+    },
+    {
+      label: 'Messages',
+      value: calls.filter((c) => c.decided_action === 'TAKE_MESSAGE').length,
+      color: palette.blue,
+    },
+    {
+      label: 'Blocked',
+      value: calls.filter((c) => c.decided_action === 'REJECT').length,
+      color: palette.red,
+    },
+  ];
+
   return (
-    <ScrollView
+    <AuraScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
@@ -128,22 +170,38 @@ export default function CallsScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <StatusBar style="auto" />
-      <View style={styles.deleteButtonRow}>
-        <PressableScale
-          style={[styles.deleteOldButton, styles.deleteButtonHalf]}
+      <StatusBar style="dark" />
+      <Card style={styles.statsCard}>
+        {stats.map((stat, index) => (
+          <Fragment key={stat.label}>
+            {index > 0 && <View style={styles.statDivider} />}
+            <View style={styles.stat}>
+              <Text style={[styles.statValue, { color: stat.color }]}>
+                {stat.value}
+              </Text>
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </View>
+          </Fragment>
+        ))}
+      </Card>
+
+      <View style={styles.cleanupRow}>
+        <TintButton
+          label="Older than 30 days"
+          icon="calendar.badge.minus"
+          color={palette.red}
           onPress={confirmDeleteOldCalls}
-        >
-          <Text style={styles.deleteOldButtonText}>
-            Delete older than 30 days
-          </Text>
-        </PressableScale>
-        <PressableScale
-          style={[styles.deleteOldButton, styles.deleteButtonHalf]}
+          style={styles.flex}
+          textStyle={styles.cleanupText}
+        />
+        <TintButton
+          label="Dismissed"
+          icon="trash"
+          color={palette.red}
           onPress={confirmDeleteDismissedCalls}
-        >
-          <Text style={styles.deleteOldButtonText}>Delete dismissed</Text>
-        </PressableScale>
+          style={styles.flex}
+          textStyle={styles.cleanupText}
+        />
       </View>
 
       {error && (
@@ -153,32 +211,45 @@ export default function CallsScreen() {
       )}
       {/* Only on first load — a refresh keeps the list on screen. */}
       {loading && calls.length === 0 && (
-        <Text style={styles.emptyText}>Loading...</Text>
+        <ActivityIndicator style={styles.loading} color={colors.accent} />
       )}
       {!loading && !error && calls.length === 0 && (
-        <Animated.Text entering={FADE_IN} style={styles.emptyText}>
-          No calls yet
-        </Animated.Text>
+        <View style={[styles.section, { marginTop: 16 }]}>
+          <EmptyState
+            icon="phone.badge.waveform.fill"
+            color={colors.accent}
+            title="No calls yet"
+            subtitle="When someone calls your assistant, it'll show up here."
+          />
+        </View>
       )}
-      <View style={styles.callList}>
-        {calls.map((call) => (
-          // Deleted calls fade out and the rest slide up; a card shrinking
-          // after Dismiss pushes the ones below smoothly.
-          <Animated.View
-            key={call.id}
-            entering={FADE_IN}
-            exiting={EXIT}
-            layout={REFLOW}
-          >
-            <CallCard
-              call={call}
-              showDateTime
-              onCallBack={callBack}
-              onDismiss={dismissCall}
-            />
-          </Animated.View>
-        ))}
+      <View style={[styles.cardList, { marginTop: 8 }]}>
+        {calls.map((call, index) => {
+          const day = dayLabel(call.started_at);
+          const newDay =
+            index === 0 || dayLabel(calls[index - 1].started_at) !== day;
+          return (
+            // Deleted calls fade out and the rest slide up; a card
+            // shrinking after Dismiss pushes the ones below smoothly.
+            <Animated.View
+              key={call.id}
+              entering={riseIn(index)}
+              exiting={EXIT}
+              layout={REFLOW}
+            >
+              {newDay && <Text style={styles.dayHeader}>{day}</Text>}
+              <View style={newDay && { marginTop: 8 }}>
+                <CallCard
+                  call={call}
+                  showClockTime
+                  onCallBack={callBack}
+                  onDismiss={dismissCall}
+                />
+              </View>
+            </Animated.View>
+          );
+        })}
       </View>
-    </ScrollView>
+    </AuraScrollView>
   );
 }

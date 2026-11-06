@@ -21,3 +21,32 @@ export function formatDateTime(isoString: string): string {
     minute: '2-digit',
   });
 }
+
+export function formatTime(isoString: string): string {
+  return new Date(isoString).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+// Section headers for the call history: Today, Yesterday, then dates.
+export function dayLabel(isoString: string): string {
+  const date = new Date(isoString);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const days = Math.round(
+    (startOfToday.getTime() - startOfDay.getTime()) / 86_400_000
+  );
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() !== new Date().getFullYear() && {
+      year: 'numeric',
+    }),
+  });
+}
