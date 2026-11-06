@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { apiFetch } from '../lib/api';
-import { formatDateTime } from '../lib/format';
-import type { StatusResponse } from '../lib/types';
-import { styles } from '../styles/shared';
+import { PressableScale } from '../../../components/PressableScale';
+
+import { apiFetch } from '../../../lib/api';
+import { formatDateTime } from '../../../lib/format';
+import {
+  ENTER,
+  EXIT,
+  FADE_IN,
+  REFLOW,
+  colorTransition,
+  haptic,
+} from '../../../lib/motion';
+import type { StatusResponse } from '../../../lib/types';
+import { styles } from '../../../styles/shared';
 
 type Rule = { mode: string; caller_type: string; action: string };
 
@@ -82,12 +93,16 @@ export default function RulesScreen() {
         return res.json();
       })
       .then(() => {
+        haptic.select();
         setRules((prev) =>
           prev.map((r) => (ruleKey(r) === key ? { ...r, action } : r))
         );
         setEditingKey(null);
       })
-      .catch(() => setError('Could not save that change — try again'))
+      .catch(() => {
+        haptic.error();
+        setError('Could not save that change — try again');
+      })
       .finally(() => setSavingKey(null));
   };
 
@@ -100,11 +115,15 @@ export default function RulesScreen() {
   })).filter((section) => section.rows.length > 0);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
+    >
       <StatusBar style="auto" />
 
       {hasCustomRule && status && (
-        <View style={styles.activeRuleBanner}>
+        <Animated.View entering={FADE_IN} style={styles.activeRuleBanner}>
           <Text style={styles.formLabel}>
             Active custom rule overrides everything below:
           </Text>
@@ -116,10 +135,14 @@ export default function RulesScreen() {
               Until {formatDateTime(status.expires_at)}
             </Text>
           )}
-        </View>
+        </Animated.View>
       )}
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <Animated.Text entering={FADE_IN} style={styles.error}>
+          {error}
+        </Animated.Text>
+      )}
 
       <Text style={styles.rulesNote}>
         Tap an action to change it. Known contacts are decided by their
@@ -139,12 +162,12 @@ export default function RulesScreen() {
           <Text style={[styles.sectionTitle, styles.sectionTitleStandalone]}>
             {MODE_LABELS[section.mode] || section.mode}
           </Text>
-          <View style={styles.rulesTable}>
+          <Animated.View layout={REFLOW} style={styles.rulesTable}>
             {section.rows.map((row, index) => {
               const key = ruleKey(row);
               const isEditing = editingKey === key;
               return (
-                <View key={key}>
+                <Animated.View key={key} layout={REFLOW}>
                   <Pressable
                     style={[
                       styles.rulesRow,
@@ -158,10 +181,16 @@ export default function RulesScreen() {
                       {ACTION_LABELS[row.action] || row.action}
                     </Text>
                   </Pressable>
+                  {/* The action picker drops open under its row and the
+                      rows below slide down to make room. */}
                   {isEditing && (
-                    <View style={styles.rulesEditRow}>
+                    <Animated.View
+                      entering={ENTER}
+                      exiting={EXIT}
+                      style={styles.rulesEditRow}
+                    >
                       {ACTION_OPTIONS.map((option) => (
-                        <Pressable
+                        <PressableScale
                           key={option}
                           style={[
                             styles.chip,
@@ -170,22 +199,23 @@ export default function RulesScreen() {
                           disabled={savingKey === key}
                           onPress={() => setRuleAction(row, option)}
                         >
-                          <Text
+                          <Animated.Text
                             style={[
                               styles.chipText,
+                              colorTransition,
                               row.action === option && styles.chipTextActive,
                             ]}
                           >
                             {ACTION_LABELS[option]}
-                          </Text>
-                        </Pressable>
+                          </Animated.Text>
+                        </PressableScale>
                       ))}
-                    </View>
+                    </Animated.View>
                   )}
-                </View>
+                </Animated.View>
               );
             })}
-          </View>
+          </Animated.View>
         </View>
       ))}
     </ScrollView>

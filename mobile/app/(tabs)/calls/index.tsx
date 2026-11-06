@@ -3,15 +3,18 @@ import { StatusBar } from 'expo-status-bar';
 import {
   Alert,
   Linking,
-  Pressable,
   RefreshControl,
   ScrollView,
   Text,
   View,
 } from 'react-native';
 
+import Animated from 'react-native-reanimated';
+
 import { CallCard } from '../../../components/CallCard';
+import { PressableScale } from '../../../components/PressableScale';
 import { apiFetch } from '../../../lib/api';
+import { EXIT, FADE_IN, REFLOW, haptic } from '../../../lib/motion';
 import type { Call } from '../../../lib/types';
 import { styles } from '../../../styles/shared';
 
@@ -52,6 +55,7 @@ export default function CallsScreen() {
   };
 
   const dismissCall = (callId: number) => {
+    haptic.light();
     const dismissedAt = new Date().toISOString();
     setCalls((prev) =>
       prev.map((call) =>
@@ -69,7 +73,10 @@ export default function CallsScreen() {
         if (!res.ok) throw new Error('request failed');
         return res.json();
       })
-      .then(() => loadCalls())
+      .then(() => {
+        haptic.medium();
+        return loadCalls();
+      })
       .catch(() => setError('Could not delete old calls'));
   };
 
@@ -90,7 +97,10 @@ export default function CallsScreen() {
         if (!res.ok) throw new Error('request failed');
         return res.json();
       })
-      .then(() => loadCalls())
+      .then(() => {
+        haptic.medium();
+        return loadCalls();
+      })
       .catch(() => setError('Could not delete dismissed calls'));
   };
 
@@ -113,42 +123,60 @@ export default function CallsScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
       <StatusBar style="auto" />
       <View style={styles.deleteButtonRow}>
-        <Pressable
+        <PressableScale
           style={[styles.deleteOldButton, styles.deleteButtonHalf]}
           onPress={confirmDeleteOldCalls}
         >
           <Text style={styles.deleteOldButtonText}>
             Delete older than 30 days
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableScale>
+        <PressableScale
           style={[styles.deleteOldButton, styles.deleteButtonHalf]}
           onPress={confirmDeleteDismissedCalls}
         >
           <Text style={styles.deleteOldButtonText}>Delete dismissed</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
-      {error && <Text style={styles.error}>{error}</Text>}
-      {loading && <Text style={styles.emptyText}>Loading...</Text>}
+      {error && (
+        <Animated.Text entering={FADE_IN} style={styles.error}>
+          {error}
+        </Animated.Text>
+      )}
+      {/* Only on first load — a refresh keeps the list on screen. */}
+      {loading && calls.length === 0 && (
+        <Text style={styles.emptyText}>Loading...</Text>
+      )}
       {!loading && !error && calls.length === 0 && (
-        <Text style={styles.emptyText}>No calls yet</Text>
+        <Animated.Text entering={FADE_IN} style={styles.emptyText}>
+          No calls yet
+        </Animated.Text>
       )}
       <View style={styles.callList}>
         {calls.map((call) => (
-          <CallCard
+          // Deleted calls fade out and the rest slide up; a card shrinking
+          // after Dismiss pushes the ones below smoothly.
+          <Animated.View
             key={call.id}
-            call={call}
-            showDateTime
-            onCallBack={callBack}
-            onDismiss={dismissCall}
-          />
+            entering={FADE_IN}
+            exiting={EXIT}
+            layout={REFLOW}
+          >
+            <CallCard
+              call={call}
+              showDateTime
+              onCallBack={callBack}
+              onDismiss={dismissCall}
+            />
+          </Animated.View>
         ))}
       </View>
     </ScrollView>

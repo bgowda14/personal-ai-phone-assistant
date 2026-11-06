@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { API_BASE_URL, TWILIO_NUMBER, apiFetch } from '../../lib/api';
-import type { Config } from '../../lib/types';
-import { styles } from '../../styles/shared';
+import { API_BASE_URL, TWILIO_NUMBER, apiFetch } from '../../../lib/api';
+import { FADE_IN } from '../../../lib/motion';
+import type { Config } from '../../../lib/types';
+import { styles } from '../../../styles/shared';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -23,9 +25,17 @@ export default function SettingsScreen() {
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
+    >
       <StatusBar style="auto" />
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <Animated.Text entering={FADE_IN} style={styles.error}>
+          {error}
+        </Animated.Text>
+      )}
 
       <View style={styles.settingsCard}>
         <Text style={styles.settingsLabel}>Twilio Assistant Number</Text>
@@ -38,7 +48,7 @@ export default function SettingsScreen() {
       </View>
 
       {config && (
-        <View style={styles.settingsCard}>
+        <Animated.View entering={FADE_IN} style={styles.settingsCard}>
           <View style={styles.settingsRow}>
             <Text style={styles.settingsLabel}>AI classification</Text>
             <Text
@@ -89,12 +99,12 @@ export default function SettingsScreen() {
                 : 'Not enforced'}
             </Text>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       <Pressable
         style={styles.manageContactsLink}
-        onPress={() => router.push('/rules')}
+        onPress={() => router.push('/settings/rules')}
         hitSlop={8}
       >
         <Text style={styles.viewAllLink}>View Rules</Text>

@@ -1,47 +1,30 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
+// The platform's real tab bar (Liquid Glass on iOS 26) — its own
+// transitions, scroll-to-top and minimize-on-scroll come for free.
 export default function TabsLayout() {
   return (
-    <Tabs>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="calls"
-        options={{
-          title: 'Calls',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="call" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="contacts"
-        options={{
-          title: 'Contacts',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" color={color} size={size} />
-          ),
-        }}
-      />
-    </Tabs>
+    <NativeTabs>
+      <NativeTabs.Trigger name="(home)">
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="calls">
+        <NativeTabs.Trigger.Icon sf={{ default: 'phone', selected: 'phone.fill' }} />
+        <NativeTabs.Trigger.Label>Calls</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="contacts">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'person.2', selected: 'person.2.fill' }}
+        />
+        <NativeTabs.Trigger.Label>Contacts</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'gearshape', selected: 'gearshape.fill' }}
+        />
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

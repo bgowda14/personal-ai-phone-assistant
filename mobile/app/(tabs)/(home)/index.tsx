@@ -11,21 +11,26 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
 
-import { CallCard } from '../../components/CallCard';
-import { apiFetch } from '../../lib/api';
-import { formatDateTime } from '../../lib/format';
-import { STATUS_OPTIONS, Status } from '../../lib/options';
-import type { Call, StatusInterpretation } from '../../lib/types';
-import { styles } from '../../styles/shared';
+import { CallCard } from '../../../components/CallCard';
+import { PressableScale } from '../../../components/PressableScale';
+import { apiFetch } from '../../../lib/api';
+import { formatDateTime } from '../../../lib/format';
+import {
+  ENTER,
+  EXIT,
+  FADE_IN,
+  REFLOW,
+  colorTransition,
+  haptic,
+} from '../../../lib/motion';
+import { STATUS_OPTIONS, Status } from '../../../lib/options';
+import type { Call, StatusInterpretation } from '../../../lib/types';
+import { styles } from '../../../styles/shared';
 
 export default function HomeScreen() {
   const router = useRouter();
-  // Home has no native header (headerShown: false), so nothing else
-  // accounts for the status bar / Dynamic Island — push content down
-  // manually using the real safe-area inset instead of a guessed constant.
-  const insets = useSafeAreaInsets();
   // Plain string, not Status — a natural-language rule (Phase 10) can set
   // a mode label outside the 6 fixed buttons, e.g. "Studying", "Traveling".
   const [status, setStatus] = useState<string>('Available');
@@ -96,6 +101,7 @@ export default function HomeScreen() {
   };
 
   const updateStatus = (option: Status) => {
+    if (option !== status) haptic.select();
     setStatus(option);
     setCustomInstruction(null);
     setCustomExpiresAt(null);
@@ -121,9 +127,10 @@ export default function HomeScreen() {
         return res.json();
       })
       .then((data) => setPendingInterpretation(data))
-      .catch(() =>
-        setInterpretError("Couldn't understand that — try rephrasing")
-      )
+      .catch(() => {
+        haptic.error();
+        setInterpretError("Couldn't understand that — try rephrasing");
+      })
       .finally(() => setInterpreting(false));
   };
 
@@ -140,13 +147,17 @@ export default function HomeScreen() {
         return res.json();
       })
       .then((data) => {
+        haptic.success();
         setStatus(data.mode);
         setCustomInstruction(data.custom_instruction);
         setCustomExpiresAt(data.expires_at);
         setPendingInterpretation(null);
         setNaturalInput('');
       })
-      .catch(() => setInterpretError('Could not apply — try again'))
+      .catch(() => {
+        haptic.error();
+        setInterpretError('Could not apply — try again');
+      })
       .finally(() => setApplyingCustom(false));
   };
 
@@ -161,6 +172,7 @@ export default function HomeScreen() {
   };
 
   const dismissCall = (callId: number) => {
+    haptic.light();
     const dismissedAt = new Date().toISOString();
     setCalls((prev) =>
       prev.map((call) =>
@@ -179,42 +191,52 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 24 },
-      ]}
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
       <StatusBar style="auto" />
-      <Text style={styles.title}>Personal AI Assistant</Text>
 
       <Text style={styles.label}>Current Status</Text>
-      <Text style={styles.status}>{status.toUpperCase()}</Text>
-      {error && <Text style={styles.error}>{error}</Text>}
+      {/* Keyed so a new status cross-fades in rather than swapping text. */}
+      <Animated.Text key={status} entering={ENTER} style={styles.status}>
+        {status.toUpperCase()}
+      </Animated.Text>
+      {error && (
+        <Animated.Text entering={FADE_IN} style={styles.error}>
+          {error}
+        </Animated.Text>
+      )}
 
       <View style={styles.buttonRow}>
         {STATUS_OPTIONS.map((option) => (
-          <Pressable
+          <PressableScale
             key={option}
             onPress={() => updateStatus(option)}
             style={[styles.button, option === status && styles.buttonActive]}
           >
-            <Text
+            <Animated.Text
               style={[
                 styles.buttonText,
+                colorTransition,
                 option === status && styles.buttonTextActive,
               ]}
             >
               {option}
-            </Text>
-          </Pressable>
+            </Animated.Text>
+          </PressableScale>
         ))}
       </View>
 
       {customInstruction && (
-        <View style={styles.activeRuleBanner}>
+        <Animated.View
+          entering={ENTER}
+          exiting={EXIT}
+          layout={REFLOW}
+          style={styles.activeRuleBanner}
+        >
           <Text style={styles.activeRuleText}>
             &ldquo;{customInstruction}&rdquo;
           </Text>
@@ -223,104 +245,136 @@ export default function HomeScreen() {
               Until {formatDateTime(customExpiresAt)}
             </Text>
           )}
-        </View>
+        </Animated.View>
       )}
 
-      <Text style={[styles.sectionTitle, styles.sectionTitleStandalone]}>
-        Tell My Assistant
-      </Text>
-      {!pendingInterpretation ? (
-        <View style={styles.naturalInputBox}>
-          <TextInput
-            style={[styles.textInput, styles.naturalInputField]}
-            placeholder="e.g. Studying until 8, let family and recruiters through"
-            value={naturalInput}
-            onChangeText={setNaturalInput}
-            multiline
-          />
-          {interpretError && (
-            <Text style={styles.error}>{interpretError}</Text>
-          )}
-          <Pressable
-            style={styles.addContactButton}
-            onPress={interpretInstruction}
-            disabled={interpreting || !naturalInput.trim()}
+      {/* Everything below slides smoothly when the banner or the
+          Tell My Assistant box changes size. */}
+      <Animated.View layout={REFLOW} style={styles.section}>
+        <Text style={[styles.sectionTitle, styles.sectionTitleStandalone]}>
+          Tell My Assistant
+        </Text>
+        {!pendingInterpretation ? (
+          <Animated.View
+            key="input"
+            entering={ENTER}
+            style={styles.naturalInputBox}
           >
-            <Text style={styles.callActionText}>
-              {interpreting ? 'Thinking...' : 'Tell Assistant'}
-            </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.naturalInputBox}>
-          <Text style={styles.formLabel}>I understood:</Text>
-          <Text style={styles.confirmSummary}>
-            {pendingInterpretation.summary}
-          </Text>
-          <View style={styles.chipRow}>
-            <Text style={styles.callTypeBadge}>
-              {pendingInterpretation.mode_label}
-            </Text>
-            {pendingInterpretation.expires_at && (
-              <Text style={styles.callTypeBadge}>
-                Until {formatDateTime(pendingInterpretation.expires_at)}
-              </Text>
+            <TextInput
+              style={[styles.textInput, styles.naturalInputField]}
+              placeholder="e.g. Studying until 8, let family and recruiters through"
+              value={naturalInput}
+              onChangeText={setNaturalInput}
+              multiline
+            />
+            {interpretError && (
+              <Animated.Text entering={FADE_IN} style={styles.error}>
+                {interpretError}
+              </Animated.Text>
             )}
-          </View>
-          {pendingInterpretation.transfer_types.length > 0 && (
-            <Text style={styles.callReason}>
-              Let through: {pendingInterpretation.transfer_types.join(', ')}
-            </Text>
-          )}
-          {pendingInterpretation.urgent_always_transfers && (
-            <Text style={styles.callReason}>
-              Urgent callers always let through
-            </Text>
-          )}
-          <View style={styles.callActionRow}>
-            <Pressable
-              style={styles.callActionButton}
-              onPress={confirmCustomStatus}
-              disabled={applyingCustom}
+            <PressableScale
+              style={[
+                styles.addContactButton,
+                (interpreting || !naturalInput.trim()) &&
+                  styles.buttonDisabled,
+              ]}
+              onPress={interpretInstruction}
+              disabled={interpreting || !naturalInput.trim()}
             >
               <Text style={styles.callActionText}>
-                {applyingCustom ? 'Applying...' : 'Confirm'}
+                {interpreting ? 'Thinking...' : 'Tell Assistant'}
               </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.callActionButton, styles.callActionGhost]}
-              onPress={cancelCustomStatus}
-            >
-              <Text
-                style={[styles.callActionText, styles.callActionGhostText]}
+            </PressableScale>
+          </Animated.View>
+        ) : (
+          <Animated.View
+            key="confirm"
+            entering={ENTER}
+            style={styles.naturalInputBox}
+          >
+            <Text style={styles.formLabel}>I understood:</Text>
+            <Text style={styles.confirmSummary}>
+              {pendingInterpretation.summary}
+            </Text>
+            <View style={styles.chipRow}>
+              <Text style={styles.callTypeBadge}>
+                {pendingInterpretation.mode_label}
+              </Text>
+              {pendingInterpretation.expires_at && (
+                <Text style={styles.callTypeBadge}>
+                  Until {formatDateTime(pendingInterpretation.expires_at)}
+                </Text>
+              )}
+            </View>
+            {pendingInterpretation.transfer_types.length > 0 && (
+              <Text style={styles.callReason}>
+                Let through: {pendingInterpretation.transfer_types.join(', ')}
+              </Text>
+            )}
+            {pendingInterpretation.urgent_always_transfers && (
+              <Text style={styles.callReason}>
+                Urgent callers always let through
+              </Text>
+            )}
+            <View style={styles.callActionRow}>
+              <PressableScale
+                style={styles.callActionButton}
+                onPress={confirmCustomStatus}
+                disabled={applyingCustom}
               >
-                Cancel
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
+                <Text style={styles.callActionText}>
+                  {applyingCustom ? 'Applying...' : 'Confirm'}
+                </Text>
+              </PressableScale>
+              <PressableScale
+                style={[styles.callActionButton, styles.callActionGhost]}
+                onPress={cancelCustomStatus}
+              >
+                <Text
+                  style={[styles.callActionText, styles.callActionGhostText]}
+                >
+                  Cancel
+                </Text>
+              </PressableScale>
+            </View>
+          </Animated.View>
+        )}
+      </Animated.View>
 
-      <View style={styles.sectionTitleRow}>
+      <Animated.View layout={REFLOW} style={styles.sectionTitleRow}>
         <Text style={styles.sectionTitle}>Recent Calls</Text>
         <Pressable onPress={() => router.push('/calls')} hitSlop={8}>
           <Text style={styles.viewAllLink}>View All Calls</Text>
         </Pressable>
-      </View>
-      {callsError && <Text style={styles.error}>{callsError}</Text>}
-      {!callsError && recentCalls.length === 0 && (
-        <Text style={styles.emptyText}>No calls yet</Text>
+      </Animated.View>
+      {callsError && (
+        <Animated.Text entering={FADE_IN} style={styles.error}>
+          {callsError}
+        </Animated.Text>
       )}
-      <View style={styles.callList}>
+      {!callsError && recentCalls.length === 0 && (
+        <Animated.Text entering={FADE_IN} style={styles.emptyText}>
+          No calls yet
+        </Animated.Text>
+      )}
+      <Animated.View layout={REFLOW} style={styles.callList}>
         {recentCalls.map((call) => (
-          <CallCard
+          // Dismissing fades the card out and the rest slide up to close
+          // the gap; new calls fade in on refresh.
+          <Animated.View
             key={call.id}
-            call={call}
-            onCallBack={callBack}
-            onDismiss={dismissCall}
-          />
+            entering={FADE_IN}
+            exiting={EXIT}
+            layout={REFLOW}
+          >
+            <CallCard
+              call={call}
+              onCallBack={callBack}
+              onDismiss={dismissCall}
+            />
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
     </ScrollView>
   );
 }

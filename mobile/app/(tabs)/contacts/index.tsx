@@ -10,11 +10,22 @@ import {
   View,
 } from 'react-native';
 import * as PhoneContacts from 'expo-contacts/legacy';
+import Animated from 'react-native-reanimated';
 
-import { apiFetch } from '../../lib/api';
-import { PRIORITY_OPTIONS, RELATIONSHIP_OPTIONS } from '../../lib/options';
-import type { Contact } from '../../lib/types';
-import { styles } from '../../styles/shared';
+import { PressableScale } from '../../../components/PressableScale';
+
+import { apiFetch } from '../../../lib/api';
+import {
+  ENTER,
+  EXIT,
+  FADE_IN,
+  REFLOW,
+  colorTransition,
+  haptic,
+} from '../../../lib/motion';
+import { PRIORITY_OPTIONS, RELATIONSHIP_OPTIONS } from '../../../lib/options';
+import type { Contact } from '../../../lib/types';
+import { styles } from '../../../styles/shared';
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -125,6 +136,7 @@ export default function ContactsScreen() {
         return res.json();
       })
       .then(() => {
+        haptic.success();
         resetForm();
         return loadContacts();
       })
@@ -143,6 +155,7 @@ export default function ContactsScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
+          haptic.medium();
           if (editingId === contactId) resetForm();
           setContacts((prev) => prev.filter((c) => c.id !== contactId));
           apiFetch(`/contacts/${contactId}`, {
@@ -158,19 +171,25 @@ export default function ContactsScreen() {
       ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
       <StatusBar style="auto" />
-      <View style={styles.addContactForm}>
+      <Animated.View layout={REFLOW} style={styles.addContactForm}>
         <Text style={styles.formTitle}>
           {editingId === null ? 'Add Contact' : 'Edit Contact'}
         </Text>
         {editingId === null && (
-          <Pressable style={styles.importButton} onPress={importFromPhone}>
-            <Text style={styles.importButtonText}>Import from Phone</Text>
-          </Pressable>
+          <Animated.View entering={FADE_IN} exiting={EXIT}>
+            <PressableScale
+              style={styles.importButton}
+              onPress={importFromPhone}
+            >
+              <Text style={styles.importButtonText}>Import from Phone</Text>
+            </PressableScale>
+          </Animated.View>
         )}
         <TextInput
           style={styles.textInput}
@@ -186,74 +205,48 @@ export default function ContactsScreen() {
           keyboardType="phone-pad"
         />
         {phoneChoices.length > 0 && (
-          <>
+          <Animated.View entering={ENTER} exiting={EXIT}>
             <Text style={styles.formLabel}>Which number?</Text>
             <View style={styles.chipRow}>
               {phoneChoices.map((choice) => (
-                <Pressable
+                <Chip
                   key={choice.number}
-                  style={[
-                    styles.chip,
-                    newPhone === choice.number && styles.chipActive,
-                  ]}
-                  onPress={() => setNewPhone(choice.number)}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      newPhone === choice.number && styles.chipTextActive,
-                    ]}
-                  >
-                    {choice.label}: {choice.number}
-                  </Text>
-                </Pressable>
+                  label={`${choice.label}: ${choice.number}`}
+                  active={newPhone === choice.number}
+                  onSelect={() => setNewPhone(choice.number)}
+                />
               ))}
             </View>
-          </>
+          </Animated.View>
         )}
         <Text style={styles.formLabel}>Relationship</Text>
         <View style={styles.chipRow}>
           {RELATIONSHIP_OPTIONS.map((option) => (
-            <Pressable
+            <Chip
               key={option}
-              style={[
-                styles.chip,
-                newRelationship === option && styles.chipActive,
-              ]}
-              onPress={() => setNewRelationship(option)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  newRelationship === option && styles.chipTextActive,
-                ]}
-              >
-                {option}
-              </Text>
-            </Pressable>
+              label={option}
+              active={newRelationship === option}
+              onSelect={() => setNewRelationship(option)}
+            />
           ))}
         </View>
         <Text style={styles.formLabel}>Priority</Text>
         <View style={styles.chipRow}>
           {PRIORITY_OPTIONS.map((option) => (
-            <Pressable
+            <Chip
               key={option}
-              style={[styles.chip, newPriority === option && styles.chipActive]}
-              onPress={() => setNewPriority(option)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  newPriority === option && styles.chipTextActive,
-                ]}
-              >
-                {option}
-              </Text>
-            </Pressable>
+              label={option}
+              active={newPriority === option}
+              onSelect={() => setNewPriority(option)}
+            />
           ))}
         </View>
-        {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable
+        {error && (
+          <Animated.Text entering={FADE_IN} style={styles.error}>
+            {error}
+          </Animated.Text>
+        )}
+        <PressableScale
           style={styles.addContactButton}
           onPress={saveContact}
           disabled={addingContact}
@@ -267,46 +260,89 @@ export default function ContactsScreen() {
                 ? 'Saving...'
                 : 'Save Changes'}
           </Text>
-        </Pressable>
+        </PressableScale>
         {editingId !== null && (
-          <Pressable style={styles.cancelEditButton} onPress={resetForm}>
-            <Text style={styles.cancelEditText}>Cancel</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <Text style={styles.sectionTitle}>All Contacts</Text>
-      {loading && <Text style={styles.emptyText}>Loading...</Text>}
-      {!loading && contacts.length === 0 && (
-        <Text style={styles.emptyText}>No contacts yet</Text>
-      )}
-      <View style={styles.callList}>
-        {contacts.map((contact) => (
-          <Pressable
-            key={contact.id}
-            style={[
-              styles.contactCard,
-              editingId === contact.id && styles.contactCardEditing,
-            ]}
-            onPress={() => startEditing(contact)}
-          >
-            <View style={styles.callNameColumn}>
-              <Text style={styles.callName}>{contact.name}</Text>
-              <Text style={styles.callCompany}>{contact.phone_number}</Text>
-            </View>
-            <View style={styles.contactBadgeColumn}>
-              <Text style={styles.callTypeBadge}>{contact.relationship}</Text>
-              <Text style={styles.callPriorityBadge}>{contact.priority}</Text>
-            </View>
-            <Pressable
-              hitSlop={8}
-              onPress={() => confirmDeleteContact(contact.id, contact.name)}
-            >
-              <Text style={styles.deleteContactLink}>Remove</Text>
+          <Animated.View entering={FADE_IN} exiting={EXIT}>
+            <Pressable style={styles.cancelEditButton} onPress={resetForm}>
+              <Text style={styles.cancelEditText}>Cancel</Text>
             </Pressable>
-          </Pressable>
+          </Animated.View>
+        )}
+      </Animated.View>
+
+      <Animated.View layout={REFLOW} style={styles.section}>
+        <Text style={styles.sectionTitle}>All Contacts</Text>
+      </Animated.View>
+      {loading && contacts.length === 0 && (
+        <Text style={styles.emptyText}>Loading...</Text>
+      )}
+      {!loading && contacts.length === 0 && (
+        <Animated.Text entering={FADE_IN} style={styles.emptyText}>
+          No contacts yet
+        </Animated.Text>
+      )}
+      <Animated.View layout={REFLOW} style={styles.callList}>
+        {contacts.map((contact) => (
+          // Removed contacts fade out and the rest slide up to fill the gap.
+          <Animated.View
+            key={contact.id}
+            entering={FADE_IN}
+            exiting={EXIT}
+            layout={REFLOW}
+          >
+            <PressableScale
+              style={[
+                styles.contactCard,
+                editingId === contact.id && styles.contactCardEditing,
+              ]}
+              onPress={() => startEditing(contact)}
+            >
+              <View style={styles.callNameColumn}>
+                <Text style={styles.callName}>{contact.name}</Text>
+                <Text style={styles.callCompany}>{contact.phone_number}</Text>
+              </View>
+              <View style={styles.contactBadgeColumn}>
+                <Text style={styles.callTypeBadge}>{contact.relationship}</Text>
+                <Text style={styles.callPriorityBadge}>{contact.priority}</Text>
+              </View>
+              <Pressable
+                hitSlop={8}
+                onPress={() => confirmDeleteContact(contact.id, contact.name)}
+              >
+                <Text style={styles.deleteContactLink}>Remove</Text>
+              </Pressable>
+            </PressableScale>
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
     </ScrollView>
+  );
+}
+
+// A selectable chip: tick haptic on a new choice, and the fill and label
+// colors cross-fade together.
+function Chip({
+  label,
+  active,
+  onSelect,
+}: {
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <PressableScale
+      style={[styles.chip, active && styles.chipActive]}
+      onPress={() => {
+        if (!active) haptic.select();
+        onSelect();
+      }}
+    >
+      <Animated.Text
+        style={[styles.chipText, colorTransition, active && styles.chipTextActive]}
+      >
+        {label}
+      </Animated.Text>
+    </PressableScale>
   );
 }

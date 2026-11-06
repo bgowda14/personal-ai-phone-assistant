@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, ScrollView, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+
+import { PressableScale } from '../../../components/PressableScale';
 
 import { apiFetch } from '../../../lib/api';
 import { decisionBadgeVariant, decisionLabel } from '../../../lib/decisions';
 import { formatDateTime } from '../../../lib/format';
+import { EXIT, FADE_IN, haptic } from '../../../lib/motion';
 import type { Call } from '../../../lib/types';
 import { styles } from '../../../styles/shared';
 
@@ -37,6 +41,7 @@ export default function CallDetailsScreen() {
 
   const dismiss = () => {
     if (!call) return;
+    haptic.light();
     const dismissedAt = new Date().toISOString();
     setCall({ ...call, dismissed_at: dismissedAt });
     apiFetch(`/calls/${call.id}/dismiss`, {
@@ -46,7 +51,11 @@ export default function CallDetailsScreen() {
 
   if (loading) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         <StatusBar style="auto" />
         <Text style={styles.emptyText}>Loading...</Text>
       </ScrollView>
@@ -55,7 +64,11 @@ export default function CallDetailsScreen() {
 
   if (error || !call) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         <StatusBar style="auto" />
         <Text style={styles.error}>{error || 'Call not found'}</Text>
       </ScrollView>
@@ -70,9 +83,16 @@ export default function CallDetailsScreen() {
   const dismissed = !!call.dismissed_at;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+      >
       <StatusBar style="auto" />
       <Stack.Screen options={{ title: name }} />
+      {/* The details arrive after the push finishes — fade them in rather
+          than popping in under the header. */}
+      <Animated.View entering={FADE_IN} style={styles.centeredSection}>
 
       <Text style={styles.detailName}>{name}</Text>
       {call.ai_company && <Text style={styles.callCompany}>{call.ai_company}</Text>}
@@ -157,20 +177,24 @@ export default function CallDetailsScreen() {
       )}
 
       {!dismissed && (
-        <View style={[styles.callActionRow, styles.detailSection]}>
-          <Pressable style={styles.callActionButton} onPress={callBack}>
+        <Animated.View
+          exiting={EXIT}
+          style={[styles.callActionRow, styles.detailSection]}
+        >
+          <PressableScale style={styles.callActionButton} onPress={callBack}>
             <Text style={styles.callActionText}>Call Back</Text>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             style={[styles.callActionButton, styles.callActionGhost]}
             onPress={dismiss}
           >
             <Text style={[styles.callActionText, styles.callActionGhostText]}>
               Dismiss
             </Text>
-          </Pressable>
-        </View>
+          </PressableScale>
+        </Animated.View>
       )}
+      </Animated.View>
     </ScrollView>
   );
 }

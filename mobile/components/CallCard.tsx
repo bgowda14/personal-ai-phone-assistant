@@ -1,10 +1,13 @@
 import { useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { decisionBadgeVariant, decisionLabel } from '../lib/decisions';
 import { formatDateTime, timeAgo } from '../lib/format';
+import { EXIT } from '../lib/motion';
 import type { Call } from '../lib/types';
 import { styles } from '../styles/shared';
+import { PressableScale } from './PressableScale';
 
 export function CallCard({
   call,
@@ -27,7 +30,7 @@ export function CallCard({
   const dismissed = !!call.dismissed_at;
 
   return (
-    <Pressable
+    <PressableScale
       style={[styles.callCard, dismissed && styles.callCardDismissed]}
       onPress={() => router.push(`/calls/${call.id}`)}
     >
@@ -88,23 +91,23 @@ export function CallCard({
         </Text>
       </View>
       {!dismissed && (
-        <View style={styles.callActionRow}>
-          <Pressable
+        <Animated.View exiting={EXIT} style={styles.callActionRow}>
+          <PressableScale
             style={styles.callActionButton}
             onPress={() => onCallBack(call.phone_number)}
           >
             <Text style={styles.callActionText}>Call Back</Text>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             style={[styles.callActionButton, styles.callActionGhost]}
             onPress={() => onDismiss(call.id)}
           >
             <Text style={[styles.callActionText, styles.callActionGhostText]}>
               Dismiss
             </Text>
-          </Pressable>
-        </View>
+          </PressableScale>
+        </Animated.View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
